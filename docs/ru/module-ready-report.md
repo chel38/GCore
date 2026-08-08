@@ -25,6 +25,8 @@ client прогон exact final build остановился на внешнем
 ## 2. Commit / Version Audited
 
 - Audited base: `f62f574` (`main`).
+- Stabilization implementation: `cf9fc09`.
+- CI exit-status correction: `4f49566`.
 - Resulting resource version: `0.1.3-alpha`.
 - API version: `1`, без breaking change.
 - Protocol version: `1`, network change additive/backward-compatible.
@@ -86,10 +88,11 @@ Hardcoded expected current version удалён. Release policy записана
 
 - Standalone Lua harness: **496/496 PASS**.
 - Настоящий CfxLua в FXServer: **485/485 PASS**.
-- Repository validation: **PASS** (`63 Lua`, `60 Markdown` до этого отчёта).
+- Repository validation: **PASS** (`63 Lua`, `61 Markdown`).
 - Lua syntax: **PASS**.
 - `git diff --check`: **PASS**.
-- GitHub Actions для итогового commit: проверяется после push.
+- GitHub Actions: **PASS**
+  ([run 31284224981](https://github.com/chel38/GCore/actions/runs/31284224981)).
 
 Pipeline не игнорирует failures и не отключает важную spawn verification.
 
@@ -168,7 +171,7 @@ Resource version повышена до `0.1.3-alpha`.
 | DTO isolation | PASS |
 | Rate limiting | PASS |
 | Versioning | PASS |
-| CI | PASS (local/Cfx; remote after push) |
+| CI | PASS (local/Cfx/GitHub Actions) |
 | Documentation | PASS |
 | Real FXServer smoke test | FAIL (strict matrix incomplete) |
 
@@ -199,7 +202,7 @@ Spawn:                 STABLE
 Security Boundary:     STABLE
 Public API v1:         FROZEN
 Tests:                 PASS
-CI:                    PASS (local/Cfx)
+CI:                    PASS (local/Cfx/GitHub Actions)
 Documentation:         SYNCHRONIZED
 FOUNDATION:
 MODULE READY: NO
