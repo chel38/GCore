@@ -64,7 +64,7 @@ sequenceDiagram
     F->>S: playerJoining(oldSource)
     S->>S: Promote temporary source to final source
 
-    C->>S: clientReady
+    C->>S: clientReady (bounded retry до ACK)
     S->>S: Validate protocol
     S->>S: Create spawn decision
     S->>C: spawnApproved
@@ -119,6 +119,34 @@ FiveM передаёт `oldSource` строкой, поэтому GreenCore но
 до поиска pending connection.
 
 Старая запись по temporary source удаляется, индексы обновляются на final source.
+
+Callbacks `deferrals` принадлежат Cfx runtime. GreenCore не захватывает их в
+`SetTimeout`, а успешный допуск вызывает `done()` без явного аргумента `nil`.
+Синхронный deadline проверяется внутри исходной coroutine `playerConnecting`.
+
+## Идемпотентный recovery после рестарта
+
+Recovery не зависит от получения единственного `forceResync`:
+
+```text
+Client resource starts → clientReady (bounded retry до server ACK)
+                         ↓
+Server читает session state
+joining   → normal ready flow
+resyncing → authoritative ped check и recovery
+spawned   → безопасный duplicate; повтор spawnConfirmed при валидном server ped
+other     → stale/duplicate без state mutation
+```
+
+`forceResync` — bounded prompt с максимальным числом попыток и одним общим timeout.
+Проактивный ACK-driven `clientReady` создаёт вторую сторону handshake. `resyncReady` сохранён
+как backward-compatible alias. Duplicates не создают новую session, decision,
+spawn, readiness thread и не продлевают timeout. Protocol mismatch не двигает
+lifecycle.
+
+Сервер сам проверяет `GetPlayerPed`, entity existence, owner и health.
+Клиентский `isPedAlive` хранится только как `clientPedAliveHint` и никогда не
+определяет server lifecycle state.
 
 ## Код обработчика
 

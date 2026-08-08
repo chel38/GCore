@@ -1,36 +1,38 @@
 # Сетевые события протокола v1
 
-Имена определены только в `shared/events.lua`. Не создавайте строковые копии в
-runtime-коде. Неизвестные поля payload отклоняются.
+Имена определены только в `shared/events.lua`. Runtime-код не дублирует event
+literals. Payload schemas точные, неизвестные поля отклоняются.
 
 ## Клиент → сервер
 
-| Событие | Payload | Состояние | Лимит |
-| --- | --- | --- | --- |
-| `gc_core:server:clientReady` | `clientVersion`, `protocolVersion`, optional `locale` | `joining` | `clientReady` |
-| `gc_core:server:requestSpawn` | пустая table | `client_ready`/`spawn_pending` | `requestSpawn` |
-| `gc_core:server:confirmSpawn` | только `decisionId` | `spawn_confirming` | `confirmSpawn` |
-| `gc_core:server:reportClientError` | известный `errorCode` | spawn flow | `reportClientError` |
-| `gc_core:server:resyncReady` | handshake + optional `isPedAlive` hint | `resyncing` | `resyncReady` |
+| Имя | Видимость | Payload / schema | Rate limit | Server validation | Возможные коды |
+| --- | --- | --- | --- | --- | --- |
+| `gc_core:server:clientReady` | protocol public | `{clientVersion:string, protocolVersion:integer, locale?:string}` | `clientReady` | session state, точный protocol, bounded strings; normal/recovery/duplicate routing | `GC-PAYLOAD-*`, `GC-PROTOCOL-MISMATCH-001`, `GC-SESSION-001` |
+| `gc_core:server:resyncReady` | compatibility public | handshake + `isPedAlive?:boolean` | `resyncReady` | тот же handshake; ped hint только diagnostic | `GC-PAYLOAD-*`, `GC-PROTOCOL-MISMATCH-001`, `GC-SESSION-001` |
+| `gc_core:server:requestSpawn` | protocol public | точная пустая table | `requestSpawn` | session и state `client_ready`/`spawn_pending` | `GC-SPAWN-DECISION-001`, `GC-RATE-LIMIT-001` |
+| `gc_core:server:confirmSpawn` | protocol public | только `{decisionId:string}` | `confirmSpawn` | source, session, state, TTL, replay, server entity/owner/model/position/alive | `GC-SPAWN-DECISION-*`, `GC-SPAWN-ENTITY-*`, `GC-SPAWN-OWNER-MISMATCH`, `GC-SPAWN-MODEL-MISMATCH`, `GC-SPAWN-POSITION-MISMATCH`, `GC-SPAWN-VERIFY-TIMEOUT` |
+| `gc_core:server:reportClientError` | protocol public | `{errorCode:known string}` | `reportClientError` | известный code, active transaction, retry policy | `GC-PAYLOAD-ERROR-001`, `GC-RATE-LIMIT-001` |
 
-`clientReady` и `resyncReady` используют один валидатор handshake. Protocol должен
-быть конечным целым числом и точно совпадать с `GetProtocolVersion()`. Подсказка
-`isPedAlive` сохраняется только для диагностики: решение recovery принимает сервер
-по OneSync entity.
+Числа rate limit находятся в `config/security.lua`. Invalid payload также считается
+нарушением. Duplicate handshake не создаёт вторую session/spawn/thread и не
+продлевает timeout бесконечно.
 
-## Сервер → клиент
+## Только сервер → клиент
 
-| Событие | Payload |
-| --- | --- |
-| `gc_core:client:connectionAccepted` | точные `apiVersion`, `protocolVersion` |
-| `gc_core:client:spawnApproved` | `decisionId`, position, ped, expiry, attempt |
-| `gc_core:client:spawnRejected` | известный `errorCode`, boolean `retryable` |
-| `gc_core:client:spawnConfirmed` | `decisionId` или nil при recovery, state=`spawned` |
-| `gc_core:client:forceResync` | без payload |
-| `gc_core:client:notify` | message ≤ 256, тип из allowlist |
+Local trigger allowed: **NO** для каждого события ниже. Общий FiveM origin guard
+`source == 65535` выполняется до payload validation и side effects.
 
-Spawn decision ID и session/correlation IDs не являются секретами и не дают
-авторизацию. Сервер всегда дополнительно проверяет source, session ownership,
-TTL, one-time consumption и текущее состояние.
+| Имя | Видимость | Payload / schema | Rate limit | Client/server validation | Возможные коды |
+| --- | --- | --- | --- | --- | --- |
+| `gc_core:client:connectionAccepted` | internal protocol | `{apiVersion:integer, protocolVersion:integer}` | N/A | server origin; точные local versions | `GC-PROTOCOL-MISMATCH-001` |
+| `gc_core:client:spawnApproved` | internal protocol | decisionId, finite position, allowlisted ped, expiry, attempt | N/A | server origin; exact schema; duplicate guard | `GC-PAYLOAD-*` |
+| `gc_core:client:spawnRejected` | internal protocol | `{errorCode:known string, retryable:boolean}` | N/A | server origin; known code | `GC-PAYLOAD-SCHEMA-001` |
+| `gc_core:client:spawnConfirmed` | internal protocol | `{decisionId?:string, state:'spawned'}` | N/A | server origin; exact state | `GC-PAYLOAD-SCHEMA-001` |
+| `gc_core:client:forceResync` | internal recovery prompt | без payload | bounded server attempts | server origin; один объединяемый bounded readiness wait | нет |
+| `gc_core:client:notify` | public presentation | `{message:string≤256, type:allowlisted}` | server API validation | server origin; exact schema | `GC-PAYLOAD-SCHEMA-001` |
+
+Decision/session/correlation IDs — значения корреляции, а не credentials. Server
+authorization всегда использует event `source`, текущую session, lifecycle, TTL и
+one-time decision state.
 
 Перейдите к [безопасности](12-security.md).

@@ -20,6 +20,7 @@ verification = {
     enabled = true,
     timeoutMs = 3000,
     intervalMs = 100,
+    maxAttempts = 31,
     positionTolerance = 8.0,
     minimumHealth = 1
 }
@@ -29,10 +30,18 @@ Do not disable `verification.enabled` on a public server. A client confirmation
 contains only `decisionId`; the server reads the OneSync entity, ownership, model,
 health, and coordinates itself.
 
-Retry is bounded by both `maxAttempts` and `maxModelAttempts`. A failed model is
-added to `attemptedPedModels`, the old decision is invalidated, and a new decision
-gets a new ID and, when possible, a different model. Fallback is used only after
-suitable models are exhausted.
+Retry uses `maxTotalAttempts`, `maxSamePedRetries`, and
+`maxDifferentPedRetries`. Only MODEL errors add a PED to `attemptedPedModels`.
+ENTITY/COLLISION/POSITION/TIMEOUT may reuse the same PED; DECISION/SESSION/SECURITY
+and unknown failures reject. Every retry gets a new decision ID.
+
+Recovery prompts use `resyncForceMaxAttempts` and `resyncForceIntervalMs`; the
+single overall bound is `resyncReadyTimeoutMs`. The proactive clientReady path
+means recovery does not depend on any prompt being delivered.
+
+Initial/recovery hello retries use `clientHelloRetryIntervalMs` and
+`clientHelloMaxAttempts`, with `clientReadyTimeoutMs` as the non-extendable total
+deadline. A valid lifecycle ACK cancels the one client retry thread.
 
 Rate limits are independent for `clientReady`, `requestSpawn`, `confirmSpawn`,
 `reportClientError`, and `resyncReady`. `violationWindowMs` expires old violations;

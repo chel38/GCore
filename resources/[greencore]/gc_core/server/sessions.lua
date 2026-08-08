@@ -258,11 +258,18 @@ function GCSessions.PromotePendingConnection(temporarySource, finalSource)
         lastPed = nil,
         spawnAttempt = 0,
         spawnRetries = 0,
+        spawnSamePedRetries = 0,
+        spawnDifferentPedRetries = 0,
+        spawnVerificationAttempts = 0,
+        nextSpawnPed = nil,
         attemptedPedModels = {},
 
         -- RU: Флаг восстановленной сессии после рестарта gc_core.
         -- EN: Flag of a recovered session after a gc_core restart.
         recovered = false,
+        recoveryStartedAt = nil,
+        recoveryCompletedAt = nil,
+        recoveryPromptAttempts = 0,
 
         metadata = {
             locale = GCConfig.General.locale,
@@ -358,11 +365,18 @@ function GCSessions.CreateRecoveredSession(finalSource, playerName, identifiers,
         lastPed = nil,
         spawnAttempt = 0,
         spawnRetries = 0,
+        spawnSamePedRetries = 0,
+        spawnDifferentPedRetries = 0,
+        spawnVerificationAttempts = 0,
+        nextSpawnPed = nil,
         attemptedPedModels = {},
 
         -- RU: Флаг восстановленной сессии после рестарта.
         -- EN: Flag of a session recovered after a restart.
         recovered = true,
+        recoveryStartedAt = GCUtils.NowSec(),
+        recoveryCompletedAt = nil,
+        recoveryPromptAttempts = 0,
 
         metadata = {
             locale = GCConfig.General.locale,
@@ -506,6 +520,28 @@ function GCSessions.GetPublicDTO(playerSource)
     end
 
     return dto
+end
+
+--- RU: Возвращает один захваченный при подключении identifier для внутреннего
+--- RU: server-side API. Таблица identifiers наружу не передаётся.
+--- EN: Returns one identifier captured at connection time for the internal
+--- EN: server-side API. The identifiers table is never exposed.
+--- @param playerSource number
+--- @param identifierType string
+--- @return string|nil identifier
+function GCSessions.GetIdentifier(playerSource, identifierType)
+    if type(playerSource) ~= 'number' or type(identifierType) ~= 'string' then
+        return nil
+    end
+
+    local session = sessions[playerSource]
+
+    if not session or type(session.identifiers) ~= 'table' then
+        return nil
+    end
+
+    local identifier = session.identifiers[identifierType]
+    return type(identifier) == 'string' and identifier or nil
 end
 
 --- RU:

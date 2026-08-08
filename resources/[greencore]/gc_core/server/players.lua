@@ -180,6 +180,33 @@ function GCPlayers.HandleDropped(reason, resourceName, clientDropReason)
     })
 end
 
+-- RU: forceResync повторяется ограниченно и остаётся лишь ускоряющей подсказкой:
+-- RU: clientReady при старте клиента также завершает recovery.
+-- EN: forceResync is retried a bounded number of times and remains only a prompt:
+-- EN: clientReady on client start can also complete recovery.
+local function sendRecoveryPrompt(playerSource, sessionId, attempt)
+    local session = GCSessions.Get(playerSource)
+
+    if not GCServerRuntime.running
+        or not session
+        or session.sessionId ~= sessionId
+        or not GCStates.Is(playerSource, 'resyncing') then
+        return
+    end
+
+    local maxAttempts = math.max(1, GCConfig.Connection.resyncForceMaxAttempts or 3)
+    session.recoveryPromptAttempts = attempt
+    TriggerClientEvent(GCEvents.Client.forceResync, playerSource)
+
+    if attempt >= maxAttempts then
+        return
+    end
+
+    SetTimeout(GCConfig.Connection.resyncForceIntervalMs or 1500, function()
+        sendRecoveryPrompt(playerSource, sessionId, attempt + 1)
+    end)
+end
+
 --- RU:
 --- Восстанавливает сессии всех онлайн-игроков после рестарта gc_core.
 --- ВАЖНО: рестарт gc_core НЕ должен уничтожать runtime-сессии и просить клиента
@@ -228,17 +255,20 @@ function GCPlayers.RecoverOnlinePlayers()
                 if session then
                     recoveredCount = recoveredCount + 1
 
-                    -- RU: Просим клиента сообщить о своей готовности к resync.
-                    -- EN: Ask the client to report its resync readiness.
-                    TriggerClientEvent(GCEvents.Client.forceResync, playerSource)
-
                     local sessionId = session.sessionId
+                    sendRecoveryPrompt(playerSource, sessionId, 1)
+
                     SetTimeout(GCConfig.Connection.resyncReadyTimeoutMs or 15000, function()
                         local currentSession = GCSessions.Get(playerSource)
 
-                        if currentSession
+                        if GCServerRuntime.running
+                            and currentSession
                             and currentSession.sessionId == sessionId
                             and GCStates.Is(playerSource, 'resyncing') then
+                            GCLogger.Warn('GC-RECOVERY-TIMEOUT', '[GC][RECOVERY] Handshake timed out', {
+                                source = playerSource,
+                                attempts = currentSession.recoveryPromptAttempts
+                            })
                             GCStates.Set(playerSource, 'error', 'resync_timeout')
                             DropPlayer(
                                 playerSource,

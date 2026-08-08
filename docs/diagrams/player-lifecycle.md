@@ -12,6 +12,8 @@ stateDiagram-v2
     spawn_pending --> spawning
     spawning --> spawn_confirming
     spawn_confirming --> spawned
+    resyncing --> spawned
+    resyncing --> spawn_pending
     spawned --> disconnecting
     disconnecting --> disconnected
     disconnected --> [*]
@@ -23,6 +25,8 @@ stateDiagram-v2
     spawn_pending --> error
     spawning --> error
     spawn_confirming --> error
+    resyncing --> error
+    resyncing --> disconnecting
     error --> disconnecting
 ```
 
@@ -36,6 +40,7 @@ stateDiagram-v2
 - **spawning**: выполняется спавн.
 - **spawn_confirming**: сервер ожидает подтверждение спавна.
 - **spawned**: игрок появился.
+- **resyncing**: сервер восстанавливает сессию после рестарта ресурса.
 - **disconnecting**: игрок отключается.
 - **disconnected**: игрок отключён.
 - **rejected**: подключение отклонено.
@@ -51,6 +56,7 @@ stateDiagram-v2
 - **spawning**: spawn is in progress.
 - **spawn_confirming**: the server waits for spawn confirmation.
 - **spawned**: the player has spawned.
+- **resyncing**: the server is recovering a session after a resource restart.
 - **disconnecting**: the player is disconnecting.
 - **disconnected**: the player disconnected.
 - **rejected**: connection rejected.
@@ -71,4 +77,6 @@ spawn_pending → error
 spawning → error
 spawn_confirming → error
 error → disconnecting
+
+resource restart → resyncing → spawned | spawn_pending | error | disconnecting
 ```

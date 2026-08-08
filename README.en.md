@@ -22,7 +22,15 @@ Connection → Validation → Session → Client readiness → Spawn → Confirm
 
 ## Development status
 
-**0.1.2-alpha** — stabilized early-alpha release.
+**0.1.3-alpha** — final core-stabilization release.
+
+Core Resource Version: `0.1.3-alpha`
+
+Core API Version: `1`
+
+Network Protocol Version: `1`
+
+Core API Status: **Stable for module development**
 
 ## Version features
 
@@ -79,7 +87,7 @@ ensure gc_core
 8. Look for the message:
 
 ```text
-[GreenCore] [INFO] gc_core 0.1.2-alpha started successfully
+[GreenCore] [INFO] gc_core 0.1.3-alpha started successfully
 ```
 
 ## Configuration
@@ -108,7 +116,7 @@ Server exports:
 | `GetApiVersion`          | number         | API version               |
 | `GetProtocolVersion`     | number         | Protocol version          |
 | `GetVersion`             | table          | `gc_core` version         |
-| `GetVersionString`       | string         | `0.1.2-alpha`             |
+| `GetVersionString`       | string         | `0.1.3-alpha`             |
 | `IsPlayerConnected`      | boolean        | Checks session            |
 | `IsPlayerReady`          | boolean        | Checks readiness          |
 | `IsPlayerSpawned`        | boolean        | Checks spawn              |
@@ -127,6 +135,8 @@ Server exports:
 - [Diagrams](docs/diagrams/architecture.md)
 - [Runtime and txAdmin](docs/en/18-runtime-txadmin.md)
 - [Migration 0.1.1 → 0.1.2](docs/en/migration/0.1.1-to-0.1.2.md)
+- [Module Contract v1](docs/en/module-contract.md)
+- [API compatibility policy](docs/en/20-api-compatibility.md)
 
 ## Testing
 

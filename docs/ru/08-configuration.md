@@ -20,6 +20,7 @@ verification = {
     enabled = true,
     timeoutMs = 3000,
     intervalMs = 100,
+    maxAttempts = 31,
     positionTolerance = 8.0,
     minimumHealth = 1
 }
@@ -29,10 +30,19 @@ verification = {
 содержит только `decisionId`; сервер сам читает OneSync entity, ownership, model,
 health и координаты.
 
-Retry ограничен одновременно `maxAttempts` и `maxModelAttempts`. Неудачная модель
-добавляется в `attemptedPedModels`, старое решение инвалидируется, а новое получает
-другой ID и по возможности другую модель. Fallback используется только после
-исчерпания подходящих моделей.
+Retry использует `maxTotalAttempts`, `maxSamePedRetries` и
+`maxDifferentPedRetries`. Только MODEL error добавляет PED в
+`attemptedPedModels`. ENTITY/COLLISION/POSITION/TIMEOUT могут повторить тот же PED;
+DECISION/SESSION/SECURITY и unknown failure отклоняются. Каждый retry получает новый
+decision ID.
+
+Recovery prompts ограничены `resyncForceMaxAttempts` и
+`resyncForceIntervalMs`, общий предел — `resyncReadyTimeoutMs`. Проактивный
+clientReady означает, что recovery не зависит от доставки prompt.
+
+Повторы initial/recovery hello используют `clientHelloRetryIntervalMs` и
+`clientHelloMaxAttempts`, а `clientReadyTimeoutMs` остаётся общим непродлеваемым
+deadline. Валидный lifecycle ACK отменяет единственный client retry thread.
 
 Rate-limit задаётся отдельно для `clientReady`, `requestSpawn`, `confirmSpawn`,
 `reportClientError` и `resyncReady`. `violationWindowMs` удаляет старые нарушения;

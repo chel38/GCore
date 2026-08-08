@@ -5,11 +5,22 @@ local root = arg[1] or '.'
 local resourceRoot = root .. '/resources/[greencore]/gc_core/'
 local fakeTime = 1000
 local clientEvents = {}
+local registeredClientHandlers = {}
+local timers = {}
+local droppedPlayers = {}
+
+GCTestHarness = {}
 
 function IsDuplicityVersion() return true end
 function GetGameTimer() return fakeTime end
 function Wait(milliseconds) fakeTime = fakeTime + (milliseconds or 0) end
-function SetTimeout(_, _) end
+function CreateThread(callback) callback() end
+function SetTimeout(milliseconds, callback)
+    timers[#timers + 1] = {
+        dueAt = fakeTime + math.max(0, milliseconds or 0),
+        callback = callback
+    }
+end
 function GetCurrentResourceName() return 'gc_core' end
 function GetResourceState() return 'started' end
 function GetConvarInt(_, defaultValue) return defaultValue end
@@ -18,14 +29,75 @@ function GetPlayerName(source) return 'Player' .. tostring(source) end
 function GetNumPlayerIdentifiers() return 0 end
 function GetPlayerIdentifier() return nil end
 function GetPlayerPed() return 0 end
+function PlayerId() return 0 end
+function PlayerPedId() return 0 end
+function NetworkIsSessionStarted() return false end
+function NetworkIsPlayerActive() return false end
 function DoesEntityExist() return false end
 function NetworkGetEntityOwner() return -1 end
 function GetEntityHealth() return 0 end
 function GetEntityModel() return 0 end
 function GetEntityCoords() return { x = 0.0, y = 0.0, z = 0.0 } end
-function DropPlayer() end
+function DropPlayer(playerSource, reason)
+    droppedPlayers[#droppedPlayers + 1] = { playerSource, reason }
+end
 function TriggerClientEvent(eventName, target, payload)
     clientEvents[#clientEvents + 1] = { eventName, target, payload }
+end
+function TriggerServerEvent() end
+
+function RegisterNetEvent(eventName, handler)
+    registeredClientHandlers[eventName] = handler
+end
+
+function TriggerEvent(eventName, payload)
+    local handler = registeredClientHandlers[eventName]
+
+    if not handler then
+        return nil
+    end
+
+    local previousSource = source
+    source = 0
+    local result = handler(payload)
+    source = previousSource
+    return result
+end
+
+function GCTestHarness.RunTimersUntil(targetTime)
+    while true do
+        local nextIndex = nil
+        local nextDueAt = nil
+
+        for index, timer in ipairs(timers) do
+            if timer.dueAt <= targetTime and (not nextDueAt or timer.dueAt < nextDueAt) then
+                nextIndex = index
+                nextDueAt = timer.dueAt
+            end
+        end
+
+        if not nextIndex then
+            break
+        end
+
+        local timer = table.remove(timers, nextIndex)
+        fakeTime = timer.dueAt
+        timer.callback()
+    end
+
+    fakeTime = targetTime
+end
+
+function GCTestHarness.NowMs()
+    return fakeTime
+end
+
+function GCTestHarness.GetDroppedPlayers()
+    return droppedPlayers
+end
+
+function GCTestHarness.ClearDroppedPlayers()
+    droppedPlayers = {}
 end
 
 function joaat(value)
@@ -77,6 +149,7 @@ local runtimeFiles = {
     'shared/utils.lua',
     'shared/ids.lua',
     'shared/events.lua',
+    'shared/client_security.lua',
     'shared/locale.lua',
     'shared/logger.lua',
     'shared/validation.lua',
@@ -89,6 +162,7 @@ local runtimeFiles = {
     'server/ped_provider.lua',
     'server/spawn_location.lua',
     'server/connection.lua',
+    'server/spawn_retry.lua',
     'server/spawn.lua',
     'server/players.lua',
     'server/notifications.lua',
@@ -103,16 +177,25 @@ local testFiles = {
     'tests/sessions_test.lua',
     'tests/connection_test.lua',
     'tests/spawn_test.lua',
+    'tests/spawn_verification_integration_test.lua',
     'tests/protocol_test.lua',
     'tests/ped_provider_test.lua',
     'tests/logger_test.lua',
     'tests/rate_limit_test.lua',
     'tests/notifications_test.lua',
     'tests/runtime_test.lua',
+    'tests/client_event_security_test.lua',
     'tests/api_test.lua'
 }
 
 for _, fileName in ipairs(runtimeFiles) do loadFile(fileName) end
+
+-- Register the real production client handlers. Local TriggerEvent reaches the
+-- actual wrapper but must stop before any client-only side effect or dependency.
+loadFile('client/events.lua')
+loadFile('client/state.lua')
+loadFile('client/readiness.lua')
+
 for _, fileName in ipairs(testFiles) do loadFile(fileName) end
 
 if not GCTest.Run() then

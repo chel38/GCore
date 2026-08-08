@@ -1,168 +1,91 @@
-# Поток спавна / Spawn Flow
+# Поток спавна
 
-## Уровень 1. Простыми словами
+## Простыми словами
 
-Когда клиент готов, **сервер** решает, где и с какой моделью появится игрок.
-Сервер случайно выбирает модель PED из белого списка.
-Клиент выполняет спавн, но НЕ считает его завершённым самостоятельно.
-Только сервер подтверждает спавн (`spawnConfirmed`).
+Клиент просит. Сервер проверяет, выбирает PED и координаты, создаёт одноразовое
+решение. Клиент исполняет его. Затем сервер читает реальную OneSync entity и только
+при совпадении фиксирует состояние `spawned`.
 
-## Уровень 2. Техническое объяснение
-
-1. Сервер выбирает модель PED через `GCPedProvider.Resolve`.
-2. Сервер выбирает точку через `GCSpawnLocationProvider.Resolve`.
-3. Сервер создаёт `spawnDecision`, содержащий `ped = { name, hash }`.
-4. Клиент получает `spawnApproved`, загружает модель и выполняет спавн.
-5. Клиент переходит в состояние `spawn_confirming` и отправляет `confirmSpawn`.
-6. Сервер валидирует решение атомарно и переводит игрока в `spawned`.
-7. Сервер отправляет `spawnConfirmed`, и только после этого клиент ставит `spawned=true`.
-
-## Схема / Diagram
+## Схема
 
 ```mermaid
 sequenceDiagram
-    participant P as Player
-    participant F as FiveM
+    participant C as Client
     participant S as gc_core Server
-    participant C as gc_core Client
-
-    P->>F: Connect
-    F->>S: playerConnecting
-    S->>S: deferrals.defer()
-    S->>S: Validate identifiers
-    S->>S: Create pending connection
-    S-->>F: deferrals.done()
-
-    F->>S: playerJoining(oldSource)
-    S->>S: Promote temporary source to final source
-
-    C->>S: clientReady
-    S->>S: Validate protocol
-    S->>S: Select random PED
-    S->>S: Create spawn decision
-
-    S->>C: spawnApproved
-    C->>C: Load PED model
-    C->>C: Fade out
-    C->>C: SetPlayerModel
-    C->>C: Load collision
-    C->>C: Place PED
-    C->>C: Fade in
-
+    participant O as OneSync
+    C->>S: requestSpawn {}
+    S->>S: Validate session/state/rate limit
+    S->>S: Create decision + state spawn_confirming
+    S-->>C: spawnApproved(decisionId, ped, position)
+    C->>C: Load model/collision and place ped
     C->>S: confirmSpawn(decisionId)
-    S->>S: Validate decision
-    S->>S: state = spawned
-    S->>S: Consume decision
-
-    S->>C: spawnConfirmed
-    C->>C: Local state = spawned
+    S->>S: Validate source/session/state/TTL/replay
+    loop Bounded and cancelable verification
+        S->>O: Get ped/entity/owner/health/model/coords
+        O-->>S: Authoritative snapshot
+    end
+    alt Snapshot matches
+        S->>S: spawn_confirming → spawned
+        S->>S: Consume decision
+        S-->>C: spawnConfirmed
+    else Snapshot fails
+        S->>S: Classify error and apply bounded policy
+        S-->>C: spawnRejected(retryable)
+    end
 ```
 
-## Серверное решение о спавне
+Внутренний переход в `spawn_confirming` завершается **до** отправки
+`spawnApproved`, поэтому быстрый ответ клиента не обгоняет server state.
+
+## Серверная проверка
+
+`confirmSpawn` содержит только `decisionId` и ничего не доказывает. Production
+`GCSpawn.Confirm` проверяет:
+
+1. решение существует, не истекло и не использовано;
+2. source и session владеют решением;
+3. lifecycle равен `spawn_confirming`;
+4. `GetPlayerPed` и `DoesEntityExist`;
+5. `NetworkGetEntityOwner(ped) == playerSource`;
+6. `GetEntityHealth` не ниже configured minimum;
+7. `GetEntityModel` совпадает с выбранным сервером PED;
+8. `GetEntityCoords` находится в пределах tolerance;
+9. после native boundary всё ещё существуют те же session/decision.
+
+Verification прекращается при disconnect, замене session/decision, истечении
+decision, остановке ресурса, несовместимой смене state, лимите попыток или timeout.
+
+## Retry policy
+
+Каждый retry потребляет старый ID и создаёт новое решение. PED меняется только при
+MODEL failure.
+
+| Категория | Примеры | Действие |
+| --- | --- | --- |
+| MODEL | invalid/load timeout/model mismatch | new decision, другой PED |
+| ENTITY | missing/dead entity | limited new decision, тот же PED |
+| COLLISION | collision timeout | limited same PED |
+| POSITION | replication/mismatch | bounded verification, затем limited same PED |
+| VERIFICATION/TIMEOUT | snapshot/verification timeout | limited same PED |
+| DECISION | unknown/expired/consumed/source mismatch | reject без spawn retry |
+| SESSION | session mismatch/change/state error | reject и cancel transaction |
+| SECURITY | wrong network owner | reject и security log |
+| UNKNOWN | незарегистрированный code | fail closed |
+
+Лимиты `maxTotalAttempts`, `maxSamePedRetries`, `maxDifferentPedRetries` и
+`verification.maxAttempts` находятся в `config/spawn.lua`. Per-player frame loop
+не создаётся.
+
+## Пример клиентского исполнения
 
 ```lua
-local spawnDecision = {
-    id = 'gc:spawn:generated-id',
-    sessionId = 'gc:session:generated-id',
-    source = playerSource,
-
-    position = {
-        x = -1037.65,
-        y = -2737.72,
-        z = 20.17,
-        heading = 329.0
-    },
-
-    ped = {
-        name = 'a_m_y_business_01',
-        hash = 0x...
-    },
-
-    createdAt = os.time(),
-    expiresAt = os.time() + 30,
-
-    confirmed = false,
-    consumed = false
-}
+-- Клиент отправляет только ID неизменяемого server decision.
+TriggerServerEvent('gc_core:server:confirmSpawn', {
+    decisionId = payload.decisionId
+})
 ```
 
-Решение создаёт **только сервер**, и случайный PED выбирается ровно один раз.
+Client coordinates, PED model, alive state и confirmation никогда не считаются
+authoritative truth.
 
-Клиент не может:
-
-- выбирать координаты;
-- выбирать модель PED;
-- создавать Decision ID;
-- продлевать срок действия;
-- подтверждать чужое решение.
-
-## Атомарное подтверждение
-
-Порядок подтверждения строгий:
-
-```text
-VALIDATE
-   ↓
-STATE TRANSITION (spawn_confirming → spawned)
-   ↓
-MARK DECISION CONFIRMED
-   ↓
-MARK DECISION CONSUMED
-   ↓
-REMOVE ACTIVE DECISION
-   ↓
-CLEAR session.spawnDecision
-   ↓
-SEND spawnConfirmed
-```
-
-Если переход состояния не удался, решение **остаётся активным** для retry/timeout
-и не потребляется преждевременно.
-
-## Клиентский спавн
-
-Клиент выполняет:
-
-1. Получение решения сервера.
-2. Проверку payload (`GCValidation.SpawnApproved`).
-3. Затемнение экрана с тайм-аутом.
-4. Проверку модели: `IsModelInCdimage`, `IsModelValid`, `IsModelAPed`.
-5. Загрузку модели с тайм-аутом.
-6. `SetPlayerModel`.
-7. Повторное получение ped (старый handle устарел).
-8. Установку серверных координат.
-9. Загрузку коллизии с тайм-аутом.
-10. Очистку задач ped.
-11. Разморозку ped и возврат управления.
-12. Переход в `spawn_confirming` (НЕ `spawned`).
-13. Отправку `confirmSpawn(decisionId)`.
-
-Клиент **никогда** не устанавливает `spawned=true` сам. Это делает только сервер
-через событие `spawnConfirmed`.
-
-## Используемые natives
-
-```lua
-IsModelInCdimage(modelHash)
-IsModelValid(modelHash)
-IsModelAPed(modelHash)
-RequestModel(modelHash)
-HasModelLoaded(modelHash)
-SetPlayerModel(PlayerId(), modelHash)
-SetModelAsNoLongerNeeded(modelHash)
-SetEntityCoordsNoOffset(...)
-SetEntityHeading(...)
-RequestCollisionAtCoord(...)
-HasCollisionLoadedAroundEntity(...)
-FreezeEntityPosition(...)
-DoScreenFadeOut(...)
-DoScreenFadeIn(...)
-```
-
-## Случайный PED
-
-Подробнее см. [Случайный выбор PED](random-ped-spawn.md).
-
-## Следующий шаг
-
-Перейдите к [Конфигурации](08-configuration.md).
+Перейдите к [конфигурации](08-configuration.md).

@@ -59,7 +59,11 @@ function GCAPI.GetPlayerIdentifier(playerSource, identifierType)
         return nil
     end
 
-    return GCIdentifiers.GetByType(playerSource, identifierType)
+    -- RU: Контракт API использует immutable connection snapshot, а не повторно
+    -- RU: читает изменчивую native boundary.
+    -- EN: The API contract uses the immutable connection snapshot instead of
+    -- EN: re-reading a mutable native boundary.
+    return GCSessions.GetIdentifier(playerSource, identifierType)
 end
 
 function GCAPI.CanUseGameplayFeatures(playerSource)

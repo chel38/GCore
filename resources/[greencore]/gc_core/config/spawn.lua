@@ -88,17 +88,21 @@ GCConfig.Spawn = {
         -- EN: Whether retries are enabled.
         enabled = true,
 
-        -- RU: Максимальное количество попыток.
-        -- EN: Maximum number of attempts.
-        maxAttempts = 2,
+        -- RU: Общий предел решений, включая первоначальное.
+        -- EN: Total decision limit, including the initial one.
+        maxTotalAttempts = 4,
+
+        -- RU: Отдельные пределы повторов той же и другой модели.
+        -- EN: Separate limits for same-model and different-model retries.
+        maxSamePedRetries = 1,
+        maxDifferentPedRetries = 2,
 
         -- RU: Задержка между попытками в миллисекундах.
         -- EN: Delay between attempts in milliseconds.
         delayMs = 1000,
 
-        -- RU: Сколько разных моделей можно попробовать до окончательного отказа.
-        -- EN: Number of distinct models allowed before a terminal failure.
-        maxModelAttempts = 4
+        -- RU: Старые имена удалены: все ограничения имеют однозначную семантику.
+        -- EN: Legacy names are removed; every limit now has explicit semantics.
     },
 
     -- RU: Серверная проверка ped и позиции после клиентского confirmSpawn.
@@ -107,6 +111,7 @@ GCConfig.Spawn = {
         enabled = true,
         timeoutMs = 3000,
         intervalMs = 100,
+        maxAttempts = 31,
         positionTolerance = 8.0,
         minimumHealth = 1
     },

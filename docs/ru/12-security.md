@@ -15,13 +15,16 @@
 - `confirmSpawn` не доказывает спавн. Сервер в ограниченном окне проверяет OneSync
   ped, entity existence, owner, health, model и расстояние до решения.
 - В recovery `isPedAlive` — только diagnostic hint. Сервер читает собственный ped.
+- Каждый server-only client handler отклоняет local `TriggerEvent`, если FiveM
+  event source не равен `65535`.
 
 ## Retry и replay
 
-Каждое spawn decision одноразовое. При ошибке старое решение немедленно удаляется,
-модель добавляется в `attemptedPedModels`, state возвращается в `spawn_pending`, и
-после задержки создаётся новый ID. Количество попыток и моделей ограничено. Replay,
-чужой source, чужая session, истёкший или уже использованный ID отклоняются.
+Каждое spawn decision одноразовое. При failure старый ID потребляется, а policy
+классифицирует причину. Только MODEL failure исключает текущий PED. Same-PED и
+different-PED retries имеют независимые limits; DECISION, SESSION, SECURITY и
+unknown failure отклоняются. Replay, чужие source/session, expired и consumed IDs
+имеют отдельные стабильные коды.
 
 ## Rate limits
 

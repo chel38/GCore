@@ -5,44 +5,9 @@
 -- EN: Client readiness service table.
 GCClientReadiness = {}
 
--- RU: Флаг, что готовность уже была отправлена.
--- EN: Flag that readiness has already been sent.
-local readinessSent = false
-
---- RU:
---- Проверяет, активна ли сетевая сессия.
----
---- EN:
---- Checks whether the network session is active.
----
---- @return boolean active Whether the session is active
-local function isNetworkSessionActive()
-    return NetworkIsSessionStarted()
-end
-
---- RU:
---- Проверяет, существует ли игрок.
----
---- EN:
---- Checks whether the player exists.
----
---- @return boolean exists Whether the player exists
-local function doesPlayerExist()
-    return DoesPlayerExist(PlayerId())
-end
-
---- RU:
---- Проверяет, существует ли ped игрока.
----
---- EN:
---- Checks whether the player ped exists.
----
---- @return boolean exists Whether the ped exists
-local function doesPlayerPedExist()
-    local ped = PlayerPedId()
-
-    return ped ~= 0 and DoesEntityExist(ped)
-end
+local waitActive = false
+local requestedHandshake = 'ready'
+local handshakeAcknowledged = false
 
 --- RU:
 --- Проверяет, готов ли клиент к отправке готовности.
@@ -52,24 +17,12 @@ end
 ---
 --- @return boolean ready Whether the client is ready
 function GCClientReadiness.IsClientReady()
-    -- RU: Проверяем активность сетевой сессии.
-    -- EN: Check the network session activity.
-    if not isNetworkSessionActive() then
-        return false
-    end
-
-    -- RU: Проверяем существование игрока.
-    -- EN: Check the player existence.
-    if not doesPlayerExist() then
-        return false
-    end
-
-    -- RU: Проверяем существование ped игрока.
-    -- EN: Check the player ped existence.
-    if not doesPlayerPedExist() then
-        return false
-    end
-
+    -- EN: Reaching this function means the client resource and its event handlers
+    -- are loaded. Network/player/ped natives may still report false before the
+    -- first server-authoritative spawn, so none of them may gate the hello.
+    -- RU: Вызов этой функции означает, что client resource и его обработчики уже
+    -- загружены. До первого server-authoritative spawn network/player/PED native
+    -- ещё могут возвращать false, поэтому они не должны блокировать hello.
     return true
 end
 
@@ -79,12 +32,6 @@ end
 --- EN:
 --- Sends the client readiness message to the server.
 function GCClientReadiness.ReportReady()
-    -- RU: Проверяем, что готовность ещё не была отправлена.
-    -- EN: Verify that readiness has not already been sent.
-    if readinessSent then
-        return
-    end
-
     -- RU: Проверяем, что клиент действительно готов.
     -- EN: Verify that the client is actually ready.
     if not GCClientReadiness.IsClientReady() then
@@ -99,13 +46,38 @@ function GCClientReadiness.ReportReady()
         locale = GCConfig.General.locale
     })
 
-    -- RU: Помечаем, что готовность отправлена.
-    -- EN: Mark that readiness has been sent.
-    readinessSent = true
-
     -- RU: Устанавливаем флаг готовности клиента.
     -- EN: Set the client readiness flag.
     GCClientState.SetReady(true)
+    return true
+end
+
+--- RU: Отправляет совместимый recovery handshake. isPedAlive остаётся только hint.
+--- EN: Sends the compatible recovery handshake. isPedAlive remains only a hint.
+--- @return boolean sent
+function GCClientReadiness.ReportResyncReady()
+    if not GCClientReadiness.IsClientReady() then
+        return false
+    end
+
+    local ped = PlayerPedId()
+    local isPedAlive = ped ~= 0 and DoesEntityExist(ped) and IsPedAlive(ped)
+
+    TriggerServerEvent(GCEvents.Server.resyncReady, {
+        protocolVersion = GCVersion.GetProtocolVersion(),
+        clientVersion = GCVersion.GetString(),
+        locale = GCConfig.General.locale,
+        isPedAlive = isPedAlive
+    })
+
+    GCClientState.SetReady(true)
+    return true
+end
+
+--- RU: Подтверждает получение handshake-ответа от сервера.
+--- EN: Acknowledges a server response to the handshake.
+function GCClientReadiness.Acknowledge()
+    handshakeAcknowledged = true
 end
 
 --- RU:
@@ -113,29 +85,57 @@ end
 ---
 --- EN:
 --- Starts a bounded loop waiting for client readiness.
-function GCClientReadiness.WaitForReadiness()
+function GCClientReadiness.WaitForReadiness(handshakeType)
+    if handshakeType == 'resync' then
+        requestedHandshake = 'resync'
+    end
+
+    -- RU: Duplicate forceResync не создаёт параллельные readiness threads.
+    -- EN: Duplicate forceResync does not create parallel readiness threads.
+    if waitActive then
+        return
+    end
+
+    waitActive = true
+
     -- RU: Запускаем поток ожидания.
     -- EN: Start the waiting thread.
     CreateThread(function()
         local startedAt = GetGameTimer()
         local timeoutMs = GCConfig.Connection.clientReadyTimeoutMs
+        local retryIntervalMs = GCConfig.Connection.clientHelloRetryIntervalMs or 1000
+        local maxAttempts = GCConfig.Connection.clientHelloMaxAttempts or 20
+        local attempts = 0
 
-        -- RU: Ограниченный цикл с тайм-аутом.
-        -- EN: Bounded loop with a timeout.
-        while not GCClientReadiness.IsClientReady() do
-            -- RU: Проверяем тайм-аут.
-            -- EN: Check the timeout.
-            if GetGameTimer() - startedAt >= timeoutMs then
+        -- EN: A hello sent immediately after client resource start may precede
+        -- the final server joining state. Retry until a valid server ACK, with
+        -- both an attempt limit and one non-extendable deadline.
+        -- RU: Hello сразу после старта client resource может прийти раньше
+        -- финального server joining state. Повторяем до валидного server ACK,
+        -- с лимитом попыток и одним непродлеваемым deadline.
+        while not handshakeAcknowledged do
+            if attempts >= maxAttempts or GetGameTimer() - startedAt >= timeoutMs then
+                waitActive = false
                 GCClientDiagnostics.Report('GC-CLIENT-READY-001')
                 return
             end
 
-            Wait(250)
+            if GCClientReadiness.IsClientReady() then
+                attempts = attempts + 1
+
+                if requestedHandshake == 'resync' then
+                    GCClientReadiness.ReportResyncReady()
+                else
+                    GCClientReadiness.ReportReady()
+                end
+            end
+
+            if not handshakeAcknowledged then
+                Wait(retryIntervalMs)
+            end
         end
 
-        -- RU: Сообщаем о готовности.
-        -- EN: Report readiness.
-        GCClientReadiness.ReportReady()
+        waitActive = false
     end)
 end
 
@@ -145,5 +145,6 @@ end
 --- EN:
 --- Resets the readiness sent flag.
 function GCClientReadiness.Reset()
-    readinessSent = false
+    handshakeAcknowledged = false
+    requestedHandshake = 'ready'
 end

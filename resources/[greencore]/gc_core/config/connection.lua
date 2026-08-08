@@ -34,7 +34,19 @@ GCConfig.Connection = {
     -- EN: Maximum client readiness wait time in milliseconds.
     clientReadyTimeoutMs = 30000,
 
-    -- RU: Максимальное ожидание resyncReady после рестарта ресурса.
-    -- EN: Maximum wait for resyncReady after a resource restart.
-    resyncReadyTimeoutMs = 15000
+    -- RU: Интервал и лимит повторов client hello до server ACK.
+    -- EN: Client hello retry interval and limit until a server ACK arrives.
+    clientHelloRetryIntervalMs = 6000,
+    clientHelloMaxAttempts = 5,
+
+    -- RU: Максимальное ожидание handshake после рестарта ресурса.
+    -- EN: Maximum handshake wait after a resource restart.
+    resyncReadyTimeoutMs = 15000,
+
+    -- RU: forceResync является только подсказкой. Клиент также сам отправляет
+    -- RU: clientReady при старте, поэтому потеря server push не блокирует recovery.
+    -- EN: forceResync is only a prompt. The client also sends clientReady on start,
+    -- EN: so losing a server push cannot block recovery.
+    resyncForceMaxAttempts = 3,
+    resyncForceIntervalMs = 1500
 }

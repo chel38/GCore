@@ -10,10 +10,13 @@
 | `GC-PROTOCOL-MISMATCH-*` | protocol не совпадает |
 | `GC-RATE-LIMIT-*` | action limit превышен |
 | `GC-SPAWN-DECISION-*` | отсутствует/истёк/потреблён decision |
-| `GC-SPAWN-OWNER/STATE-*` | чужая session/source или неверный state |
-| `GC-SPAWN-VERIFY-*` | server entity/model/position не подтвердились |
+| `GC-SPAWN-ENTITY-*` | отсутствующая или мёртвая server entity |
+| `GC-SPAWN-OWNER-MISMATCH` | network owner не равен player source |
+| `GC-SPAWN-MODEL/POSITION-MISMATCH` | snapshot не совпал с server decision |
+| `GC-SPAWN-SESSION-CHANGED` | async verification transaction отменена |
+| `GC-SPAWN-VERIFY-*` | bounded server verification failure/timeout |
 | `GC-SPAWN-PED-*` | ped config/load/exhaustion |
-| `GC-RESYNC-*` | recovery/resync lifecycle |
+| `GC-RECOVERY-*`, `GC-RESYNC-*` | recovery timeout/stale/lifecycle diagnostics |
 
 Не передавайте внутренний код игроку автоматически. Используйте `GCErrors.IsPublic`
 и локализованный `localeKey`. В лог добавляйте безопасный контекст без полного

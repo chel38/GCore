@@ -73,3 +73,221 @@ GCTest.Register('connection.get_fallback', function()
 
     GCSessions.Remove(11, 'test_cleanup')
 end)
+
+GCTest.Register('connection.deferral_references_are_not_captured_by_timer', function()
+    local originalSource = source
+    local originalGetAll = GCIdentifiers.GetAll
+    local originalSetTimeout = SetTimeout
+    local scheduledTimers = 0
+    local calls = {}
+    local doneArity
+
+    source = 60046
+    GCIdentifiers.GetAll = function()
+        return { license = 'license:deferral-lifetime-60046' }
+    end
+    SetTimeout = function()
+        scheduledTimers = scheduledTimers + 1
+    end
+
+    local deferrals = {
+        defer = function() calls[#calls + 1] = 'defer' end,
+        update = function() calls[#calls + 1] = 'update' end,
+        done = function(...)
+            doneArity = select('#', ...)
+            calls[#calls + 1] = 'done'
+        end
+    }
+
+    GCConnection.HandleConnecting('DeferralLifetime', function() end, deferrals)
+
+    source = originalSource
+    GCIdentifiers.GetAll = originalGetAll
+    SetTimeout = originalSetTimeout
+
+    GCTest.ExpectEqual(scheduledTimers, 0, 'runtime-owned deferral references are never captured by SetTimeout')
+    GCTest.ExpectEqual(table.concat(calls, ','), 'defer,update,done', 'deferral lifecycle completes in the event coroutine')
+    GCTest.ExpectEqual(doneArity, 0, 'successful deferral calls Cfx done with no explicit nil argument')
+    GCTest.ExpectNotNil(GCSessions.GetPendingConnection(60046), 'validated connection remains pending for playerJoining')
+
+    GCSessions.RemovePendingConnection(60046)
+end, 'runtime')
+
+GCTest.Register('connection.deferral_deadline_is_bounded', function()
+    local originalSource = source
+    local originalNowMs = GCUtils.NowMs
+    local originalGetAll = GCIdentifiers.GetAll
+    local originalTimeout = GCConfig.Connection.deferralTimeoutMs
+    local nowCalls = 0
+    local identifiersRead = false
+    local doneMessage
+
+    source = 60047
+    GCConfig.Connection.deferralTimeoutMs = 1
+    GCUtils.NowMs = function()
+        nowCalls = nowCalls + 1
+        return nowCalls == 1 and 0 or 2
+    end
+    GCIdentifiers.GetAll = function()
+        identifiersRead = true
+        return {}
+    end
+
+    GCConnection.HandleConnecting('DeferralDeadline', function() end, {
+        defer = function() end,
+        update = function() end,
+        done = function(message) doneMessage = message end
+    })
+
+    source = originalSource
+    GCUtils.NowMs = originalNowMs
+    GCIdentifiers.GetAll = originalGetAll
+    GCConfig.Connection.deferralTimeoutMs = originalTimeout
+
+    GCTest.ExpectTrue(identifiersRead, 'temporary-source identifiers are captured before the first yield')
+    GCTest.ExpectEqual(doneMessage, GC_T(GCConfig.General.locale or 'en', 'connection.timeout'), 'deadline returns stable timeout message')
+    GCTest.ExpectNil(GCSessions.GetPendingConnection(60047), 'timed out connection leaves no pending state')
+end, 'runtime')
+
+local function recoveredSession(playerSource)
+    return GCSessions.CreateRecoveredSession(
+        playerSource,
+        'Recovered' .. tostring(playerSource),
+        { license = 'license:recovery-' .. tostring(playerSource) },
+        'license:recovery-' .. tostring(playerSource),
+        'license'
+    )
+end
+
+local function handshake(overrides)
+    local payload = {
+        clientVersion = GCVersion.GetString(),
+        protocolVersion = GCVersion.GetProtocolVersion(),
+        locale = 'en'
+    }
+
+    for key, value in pairs(overrides or {}) do
+        payload[key] = value
+    end
+
+    return payload
+end
+
+GCTest.Register('recovery.lost_force_resync_client_ready_succeeds', function()
+    local session = recoveredSession(40)
+    local original = GCPlayers.HasAuthoritativeLivePed
+    GCPlayers.HasAuthoritativeLivePed = function() return true end
+
+    local success, errorCode = GCConnection.HandleClientReady(40, handshake())
+    GCPlayers.HasAuthoritativeLivePed = original
+
+    GCTest.ExpectTrue(success, 'ordinary clientReady completes recovered session')
+    GCTest.ExpectNil(errorCode, 'recovery clientReady has no error')
+    GCTest.ExpectTrue(GCStates.Is(40, 'spawned'), 'authoritative live ped restores spawned')
+    GCTest.ExpectNil(session.metadata.clientPedAliveHint, 'clientReady creates no authoritative ped hint')
+    GCSessions.Remove(40, 'test_cleanup')
+end, 'integration')
+
+GCTest.Register('recovery.client_hint_never_overrides_server', function()
+    local session = recoveredSession(41)
+    local original = GCPlayers.HasAuthoritativeLivePed
+    GCPlayers.HasAuthoritativeLivePed = function() return false end
+
+    local success = GCConnection.HandleResyncReady(41, handshake({ isPedAlive = true }))
+    GCPlayers.HasAuthoritativeLivePed = original
+
+    GCTest.ExpectTrue(success, 'recovery enters safe spawn flow')
+    GCTest.ExpectTrue(session.metadata.clientPedAliveHint, 'client hint is retained for diagnostics')
+    GCTest.ExpectFalse(GCStates.Is(41, 'spawned'), 'fake alive hint cannot set spawned')
+    GCTest.ExpectTrue(GCStates.Is(41, 'spawn_confirming'), 'server creates a verified spawn transaction')
+    GCSpawn.RemovePlayerDecisions(41)
+    GCSessions.Remove(41, 'test_cleanup')
+end, 'security')
+
+GCTest.Register('recovery.duplicate_hello_is_idempotent', function()
+    local session = recoveredSession(42)
+    local original = GCPlayers.HasAuthoritativeLivePed
+    GCPlayers.HasAuthoritativeLivePed = function() return true end
+
+    local first = GCConnection.HandleClientReady(42, handshake())
+    local second = GCConnection.HandleClientReady(42, handshake())
+    GCPlayers.HasAuthoritativeLivePed = original
+
+    GCTest.ExpectTrue(first, 'first hello succeeds')
+    GCTest.ExpectTrue(second, 'duplicate hello succeeds idempotently')
+    GCTest.ExpectEqual(GCSessions.Get(42), session, 'duplicate hello keeps the same session')
+    GCTest.ExpectTrue(GCStates.Is(42, 'spawned'), 'duplicate hello keeps spawned state')
+    GCSessions.Remove(42, 'test_cleanup')
+end, 'integration')
+
+GCTest.Register('recovery.stale_resync_ready_does_not_change_state', function()
+    local identifiers = { license = 'license:stale-resync-43' }
+    GCSessions.CreatePendingConnection(60043, 'Player43', identifiers, identifiers.license, 'license')
+    GCSessions.PromotePendingConnection(60043, 43)
+    GCStates.Set(43, 'validated', 'test')
+    GCStates.Set(43, 'joining', 'test')
+    GCStates.Set(43, 'client_ready', 'test')
+    GCStates.Set(43, 'spawn_pending', 'test')
+
+    local success = GCConnection.HandleResyncReady(43, handshake({ isPedAlive = true }))
+
+    GCTest.ExpectTrue(success, 'stale resyncReady is acknowledged safely')
+    GCTest.ExpectTrue(GCStates.Is(43, 'spawn_pending'), 'stale response changes no lifecycle state')
+    GCSessions.Remove(43, 'test_cleanup')
+end, 'security')
+
+GCTest.Register('recovery.protocol_mismatch_is_rejected', function()
+    recoveredSession(44)
+    local success, errorCode = GCConnection.HandleClientReady(44, handshake({ protocolVersion = 999 }))
+
+    GCTest.ExpectFalse(success, 'incompatible recovery hello is rejected')
+    GCTest.ExpectEqual(errorCode, 'GC-PROTOCOL-MISMATCH-001', 'stable protocol error is returned')
+    GCTest.ExpectTrue(GCStates.Is(44, 'resyncing'), 'protocol mismatch cannot advance recovery')
+    GCSessions.Remove(44, 'test_cleanup')
+end, 'security')
+
+GCTest.Register('recovery.timeout_is_bounded_and_cleans_lifecycle', function()
+    if not GCTestHarness then
+        GCTest.ExpectTrue(true, 'standalone timer harness owns this regression')
+        return
+    end
+
+    local originalGetPlayers = GetPlayers
+    local originalGetAll = GCIdentifiers.GetAll
+    local originalGetPrimary = GCIdentifiers.GetPrimary
+    local timeout = GCConfig.Connection.resyncReadyTimeoutMs
+    local interval = GCConfig.Connection.resyncForceIntervalMs
+    local maxAttempts = GCConfig.Connection.resyncForceMaxAttempts
+
+    GetPlayers = function() return { '45' } end
+    GCIdentifiers.GetAll = function() return { license = 'license:recovery-timeout-45' } end
+    GCIdentifiers.GetPrimary = function()
+        return 'license:recovery-timeout-45', 'license'
+    end
+    GCConfig.Connection.resyncReadyTimeoutMs = 100
+    GCConfig.Connection.resyncForceIntervalMs = 10
+    GCConfig.Connection.resyncForceMaxAttempts = 3
+    GCServerRuntime.running = true
+    GCTestHarness.ClearDroppedPlayers()
+
+    local startedAt = GCTestHarness.NowMs()
+    local recovered = GCPlayers.RecoverOnlinePlayers()
+    GCTestHarness.RunTimersUntil(startedAt + 100)
+
+    GetPlayers = originalGetPlayers
+    GCIdentifiers.GetAll = originalGetAll
+    GCIdentifiers.GetPrimary = originalGetPrimary
+    GCConfig.Connection.resyncReadyTimeoutMs = timeout
+    GCConfig.Connection.resyncForceIntervalMs = interval
+    GCConfig.Connection.resyncForceMaxAttempts = maxAttempts
+
+    local session = GCSessions.Get(45)
+    local drops = GCTestHarness.GetDroppedPlayers()
+    GCTest.ExpectEqual(recovered, 1, 'one online player gets one recovered session')
+    GCTest.ExpectEqual(session.recoveryPromptAttempts, 3, 'forceResync attempts are bounded')
+    GCTest.ExpectTrue(GCStates.Is(45, 'error'), 'unanswered recovery enters error at one timeout')
+    GCTest.ExpectEqual(#drops, 1, 'recovery timeout drops exactly once')
+
+    GCSessions.Remove(45, 'test_cleanup')
+    GCServerRuntime.running = nil
+end, 'runtime')

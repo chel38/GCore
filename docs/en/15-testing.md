@@ -28,14 +28,20 @@ pwsh tools/validate-repository.ps1
 The harness emulates only the FiveM boundaries needed by unit/integration tests.
 A local FXServer smoke test validates the real OneSync boundary.
 
-Coverage includes runtime detection, unified handshakes, exact payload schemas,
-finite numbers, lifecycle transitions, recovery DTOs, one-time spawn decisions,
-replay/ownership/TTL, server entity snapshots, new-decision retry, action rate
-limits, violation decay, immutable API DTOs, masking, notifications, locale, and
-the ped provider.
+Coverage includes the lost-forceResync race, duplicate/stale handshakes, all six
+client event origin guards, exact payload schemas, lifecycle, and the full
+production `GCSpawn.Confirm` path with verification enabled. Entity missing/dead,
+wrong owner/model/position, timeout, expired/consumed/foreign decisions,
+session replacement, and disconnect cancellation are tested. All 14 API v1
+methods have contract tests, including DTO mutation and side effects.
 
 The workflow also compiles every Lua file (translating only CfxLua backtick hashes
-in temporary copies), checks version consistency and Markdown links, and rejects
+in temporary copies), derives version/API/protocol from `shared/version.lua`,
+checks manifest/CHANGELOG/README/tag consistency and Markdown links, and rejects
 raw runtime detection, event literals, or direct state mutation.
+
+The standalone harness is not a substitute for a real client. Release gating must
+report `REAL FXSERVER TEST: NOT RUN` unless the documented connect/spawn/restart/
+disconnect/reconnect scenario was actually executed.
 
 Continue with the [development guide](16-development-guide.md).

@@ -138,6 +138,27 @@ GCErrors = {
         severity = 'warn',
         public = false
     },
+    ['GC-SPAWN-ENTITY-MISSING'] = {
+        localeKey = 'spawn.failed', severity = 'warn', public = false
+    },
+    ['GC-SPAWN-ENTITY-DEAD'] = {
+        localeKey = 'spawn.failed', severity = 'warn', public = false
+    },
+    ['GC-SPAWN-OWNER-MISMATCH'] = {
+        localeKey = 'spawn.rejected', severity = 'warn', public = false
+    },
+    ['GC-SPAWN-MODEL-MISMATCH'] = {
+        localeKey = 'spawn.failed', severity = 'warn', public = false
+    },
+    ['GC-SPAWN-POSITION-MISMATCH'] = {
+        localeKey = 'spawn.failed', severity = 'warn', public = false
+    },
+    ['GC-SPAWN-VERIFY-TIMEOUT'] = {
+        localeKey = 'spawn.failed', severity = 'error', public = false
+    },
+    ['GC-SPAWN-SESSION-CHANGED'] = {
+        localeKey = 'spawn.rejected', severity = 'warn', public = false
+    },
     ['GC-SPAWN-PED-EXHAUSTED-001'] = {
         localeKey = 'spawn.failed',
         severity = 'error',
@@ -370,6 +391,30 @@ GCErrors = {
     ['GC-RESYNC-002'] = {
         localeKey = 'error.internal',
         severity = 'error',
+        public = false
+    },
+    ['GC-SPAWN-DECISION-UNKNOWN'] = {
+        localeKey = 'spawn.rejected', severity = 'warn', public = false
+    },
+    ['GC-SPAWN-DECISION-SOURCE-MISMATCH'] = {
+        localeKey = 'spawn.rejected', severity = 'warn', public = false
+    },
+    ['GC-SPAWN-DECISION-SESSION-MISMATCH'] = {
+        localeKey = 'spawn.rejected', severity = 'warn', public = false
+    },
+    ['GC-RECOVERY-TIMEOUT'] = {
+        localeKey = 'connection.timeout',
+        severity = 'error',
+        public = false
+    },
+    ['GC-RECOVERY-STALE-RESPONSE'] = {
+        localeKey = 'error.internal',
+        severity = 'warn',
+        public = false
+    },
+    ['GC-RECOVERY-ENTITY-MISSING'] = {
+        localeKey = 'spawn.failed',
+        severity = 'warn',
         public = false
     }
 }

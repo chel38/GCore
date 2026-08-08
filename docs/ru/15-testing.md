@@ -31,19 +31,27 @@ Harness эмулирует только границы FiveM, нужные unit/
 ## Что проверяется
 
 - runtime detection с фактическим вызовом native;
-- единый clientReady/resyncReady handshake и mismatch protocol;
+- lost-forceResync race, duplicate/stale clientReady/resyncReady и protocol mismatch;
 - точные payload schemas, неизвестные поля, NaN/Infinity;
 - state machine и lifecycle;
 - pending/session/recovery DTO;
 - одноразовые spawn decisions, replay/ownership/TTL;
-- server snapshot model/owner/position verification;
-- новая модель и новый decision на retry;
+- все шесть client event origin guards;
+- полный production `GCSpawn.Confirm` с `verification.enabled=true`: entity
+  missing/dead, owner/model/position mismatch, timeout, expired/consumed/foreign
+  decision, session replacement и disconnect cancellation;
+- retry policy для same/different PED и terminal categories;
 - action rate limits и decay violation window;
-- API DTO immutability и invalid arguments;
+- contract всех 14 API v1 methods, DTO immutability, state и side effects;
 - masking, notifications, locale и ped provider.
 
 Workflow также компилирует все Lua-файлы (преобразуя только CfxLua backtick hash во
-временной копии), сверяет версии, локальные Markdown-ссылки и запрещённые patterns:
+временной копии), извлекает version/API/protocol из `shared/version.lua`, сверяет
+manifest/CHANGELOG/README/tag, локальные Markdown-ссылки и запрещённые patterns:
 сырой runtime detection, event literals и прямые state mutations.
+
+Standalone harness не заменяет реальный client. Release gate обязан писать
+`REAL FXSERVER TEST: NOT RUN`, если connect/spawn/restart/disconnect/reconnect
+сценарий фактически не выполнялся.
 
 Перейдите к [руководству разработчика](16-development-guide.md).

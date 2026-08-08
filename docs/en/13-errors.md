@@ -10,10 +10,13 @@ arbitrary client strings are rejected.
 | `GC-PROTOCOL-MISMATCH-*` | incompatible protocol |
 | `GC-RATE-LIMIT-*` | action limit exceeded |
 | `GC-SPAWN-DECISION-*` | missing, expired, or consumed decision |
-| `GC-SPAWN-OWNER/STATE-*` | foreign session/source or invalid state |
-| `GC-SPAWN-VERIFY-*` | server entity/model/position did not verify |
+| `GC-SPAWN-ENTITY-*` | missing or dead server entity |
+| `GC-SPAWN-OWNER-MISMATCH` | network owner is not the player source |
+| `GC-SPAWN-MODEL/POSITION-MISMATCH` | snapshot differs from server decision |
+| `GC-SPAWN-SESSION-CHANGED` | async verification transaction was canceled |
+| `GC-SPAWN-VERIFY-*` | bounded server verification failure/timeout |
 | `GC-SPAWN-PED-*` | ped config/load/exhaustion |
-| `GC-RESYNC-*` | recovery/resync lifecycle |
+| `GC-RECOVERY-*`, `GC-RESYNC-*` | recovery timeout/stale/lifecycle diagnostics |
 
 Never expose an internal code automatically. Check `GCErrors.IsPublic` and use the
 localized `localeKey`. Logs must not include full identifiers, license keys, or

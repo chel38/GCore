@@ -31,7 +31,15 @@ Server picks PED → Spawn → Confirmation → Disconnection
 
 ## Статус разработки / Development status
 
-**0.1.2-alpha** — стабилизированный early-alpha runtime / stabilized early-alpha runtime.
+**0.1.3-alpha** — финальный core-stabilization release / final core-stabilization release.
+
+Core Resource Version: `0.1.3-alpha`
+
+Core API Version: `1`
+
+Network Protocol Version: `1`
+
+Core API Status: **Stable for module development**
 
 ## Возможности версии / Version features
 
@@ -90,7 +98,7 @@ ensure gc_core
 8. Найдите сообщение / Look for the message:
 
 ```text
-[GreenCore] [INFO] gc_core 0.1.2-alpha started successfully (recovered N players)
+[GreenCore] [INFO] gc_core 0.1.3-alpha started successfully (recovered N players)
 ```
 
 ## Конфигурация / Configuration
@@ -128,7 +136,7 @@ resources/[greencore]/gc_core/
 | `GetApiVersion`          | number         | Версия API                |
 | `GetProtocolVersion`     | number         | Версия протокола          |
 | `GetVersion`             | table          | Версия `gc_core`          |
-| `GetVersionString`       | string         | `0.1.2-alpha`             |
+| `GetVersionString`       | string         | `0.1.3-alpha`             |
 | `IsPlayerConnected`      | boolean        | Проверяет сессию          |
 | `IsPlayerReady`          | boolean        | Проверяет готовность      |
 | `IsPlayerSpawned`        | boolean        | Проверяет спавн           |
@@ -151,6 +159,8 @@ timestamps, lastPed и locale. Внутренние identifiers, spawn decision 
 - [Random PED spawn RU](docs/ru/random-ped-spawn.md)
 - [Random PED spawn EN](docs/en/random-ped-spawn.md)
 - [txAdmin и runtime](docs/ru/18-runtime-txadmin.md) / [txAdmin and runtime](docs/en/18-runtime-txadmin.md)
+- [Контракт модулей](docs/ru/module-contract.md) / [Module Contract](docs/en/module-contract.md)
+- [Совместимость API](docs/ru/20-api-compatibility.md) / [API compatibility](docs/en/20-api-compatibility.md)
 - [Миграция 0.1.1 → 0.1.2](docs/ru/migration/0.1.1-to-0.1.2.md) / [Migration](docs/en/migration/0.1.1-to-0.1.2.md)
 
 ## Тестирование / Testing

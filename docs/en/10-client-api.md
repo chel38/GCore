@@ -20,37 +20,33 @@ It interacts with the server through network events.
 
 ## Client readiness
 
-The client does not send a request immediately after loading the file.
-It waits for:
+The loaded client resource is itself the readiness boundary. Initial FiveM
+network/player/PED natives may still report inactive before the first
+server-authoritative spawn, so they do not gate hello.
 
-- network session activity;
-- player existence;
-- `PlayerPedId()` existence;
-- correct ped state.
+An early network event may precede the final server `joining` state. The client
+therefore retries hello at a configured interval until a valid server ACK. Both
+the number of attempts and the total deadline are bounded.
 
 ```lua
 CreateThread(function()
-    local startedAt = GetGameTimer()
-    local timeoutMs = 30000
-
-    while not NetworkIsSessionStarted() do
-        if GetGameTimer() - startedAt >= timeoutMs then
-            GCClientDiagnostics.Report('GC-CLIENT-READY-001')
-            return
-        end
-
-        Wait(250)
+    for attempt = 1, GCConfig.Connection.clientHelloMaxAttempts do
+        GCClientReadiness.ReportReady()
+        if serverAckReceived then break end
+        Wait(GCConfig.Connection.clientHelloRetryIntervalMs)
     end
-
-    GCClientReadiness.ReportReady()
 end)
 ```
+
+Valid `connectionAccepted`, `spawnApproved`, `spawnRejected`, or
+`spawnConfirmed` events stop the retry loop. All are protected by the
+server-origin guard.
 
 ## Readiness payload
 
 ```lua
 {
-    clientVersion = '0.1.2-alpha',
+    clientVersion = '0.1.3-alpha',
     protocolVersion = 1,
     locale = 'ru'
 }

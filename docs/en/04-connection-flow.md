@@ -57,7 +57,7 @@ sequenceDiagram
     S-->>F: deferrals.done()
     F->>S: playerJoining(oldSource)
     S->>S: Promote pending connection
-    C->>S: clientReady
+    C->>S: clientReady (bounded retry until ACK)
     S->>S: Validate protocol
     S->>C: spawnApproved
     C->>S: confirmSpawn
@@ -75,6 +75,35 @@ Pending connections expire after
 `GCConfig.Connection.pendingConnectionLifetimeMs`. Active sessions waiting for
 `clientReady` are also protected by the server-side
 `GCConfig.Connection.clientReadyTimeoutMs` timeout.
+
+The Cfx `deferrals` callbacks are runtime-owned references. GreenCore never
+captures them in `SetTimeout`, and successful completion calls `done()` with no
+explicit `nil` argument. The synchronous validation deadline is checked in the
+original `playerConnecting` coroutine.
+
+## Idempotent restart recovery
+
+Recovery does not depend on receiving one `forceResync` event:
+
+```text
+Client resource starts → clientReady (bounded retry until server ACK)
+                         ↓
+Server reads session state
+joining   → normal ready flow
+resyncing → authoritative ped check and recovery
+spawned   → safe duplicate; re-send spawnConfirmed if server ped is valid
+other     → stale/duplicate acknowledgement with no state mutation
+```
+
+`forceResync` is a bounded prompt (maximum attempts and one total timeout), while
+the proactive, ACK-driven `clientReady` is the second direction of the handshake.
+`resyncReady` remains a backward-compatible alias. Duplicates never create a new
+session, decision, spawn, readiness thread, or timeout extension. Protocol mismatch
+never advances lifecycle.
+
+The server alone checks `GetPlayerPed`, entity existence, owner, and health.
+`isPedAlive` from the client is stored only as `clientPedAliveHint`; it never
+determines server lifecycle state.
 
 ## Handlers
 

@@ -15,13 +15,16 @@ executes, and the server independently verifies the result.
 - `confirmSpawn` is not proof. During a bounded window the server verifies the
   OneSync ped, entity existence, owner, health, model, and decision distance.
 - During recovery `isPedAlive` is diagnostic only; the server reads its own ped.
+- Every server-only client handler rejects local `TriggerEvent` calls unless the
+  FiveM event source equals `65535`.
 
 ## Retry and replay
 
-Each spawn decision is one-time. On failure the old decision is removed, the model
-is added to `attemptedPedModels`, state returns to `spawn_pending`, and a new ID is
-created after a delay. Attempt/model counts are bounded. Replays, foreign sources,
-foreign sessions, expired IDs, and consumed IDs are rejected.
+Each spawn decision is one-time. On failure the old ID is consumed and policy
+classifies the cause. Only MODEL failures exclude the current PED. Same-PED and
+different-PED retries have independent limits; DECISION, SESSION, SECURITY, and
+unknown failures are rejected. Replays, foreign sources/sessions, expired IDs,
+and consumed IDs have distinct stable codes.
 
 ## Rate limits
 

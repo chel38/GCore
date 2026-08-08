@@ -3,11 +3,17 @@
 
 -- RU: Обработчик подтверждения подключения.
 -- EN: Connection acceptance handler.
-RegisterNetEvent(GCEvents.Client.connectionAccepted, function(payload)
+GCClientSecurity.RegisterServerEvent(GCEvents.Client.connectionAccepted, function(payload)
     local valid, errorCode = GCValidation.ConnectionAccepted(payload)
 
     if not valid then
         GCClientDiagnostics.Report(errorCode)
+        return
+    end
+
+    GCClientReadiness.Acknowledge()
+
+    if GCClientState.IsConnectionAccepted() then
         return
     end
 
@@ -22,7 +28,7 @@ end)
 
 -- RU: Обработчик одобрения спавна.
 -- EN: Spawn approval handler.
-RegisterNetEvent(GCEvents.Client.spawnApproved, function(payload)
+GCClientSecurity.RegisterServerEvent(GCEvents.Client.spawnApproved, function(payload)
     local valid, errorCode = GCValidation.SpawnApproved(payload)
 
     if not valid then
@@ -30,9 +36,14 @@ RegisterNetEvent(GCEvents.Client.spawnApproved, function(payload)
         return
     end
 
+    GCClientReadiness.Acknowledge()
+
     -- RU: Проверяем, что спавн ещё не выполняется.
     -- EN: Verify that a spawn is not already in progress.
-    if GCClientState.IsSpawning() then
+    if GCClientState.IsSpawning()
+        or GCClientState.IsSpawnConfirming()
+        or GCClientState.IsSpawned()
+        or GCClientState.IsSpawnDecisionReceived() then
         return
     end
 
@@ -48,10 +59,18 @@ end)
 -- RU: Клиент не должен оставаться в состоянии spawned после отклонения.
 -- EN: Spawn rejection handler.
 -- EN: The client must not remain in the spawned state after a rejection.
-RegisterNetEvent(GCEvents.Client.spawnRejected, function(payload)
+GCClientSecurity.RegisterServerEvent(GCEvents.Client.spawnRejected, function(payload)
     local valid = GCValidation.SpawnRejected(payload)
 
     if not valid then
+        return
+    end
+
+    GCClientReadiness.Acknowledge()
+
+    -- RU: Старый reject не может сбросить уже подтверждённый spawned state.
+    -- EN: A stale rejection cannot reset an already confirmed spawned state.
+    if GCClientState.IsSpawned() then
         return
     end
 
@@ -77,12 +96,14 @@ end)
 -- EN: Spawn confirmation handler.
 -- EN: ONLY after this event does the client set spawned=true.
 -- EN: The server remains the single source of truth.
-RegisterNetEvent(GCEvents.Client.spawnConfirmed, function(payload)
+GCClientSecurity.RegisterServerEvent(GCEvents.Client.spawnConfirmed, function(payload)
     local valid = GCValidation.SpawnConfirmed(payload)
 
     if not valid then
         return
     end
+
+    GCClientReadiness.Acknowledge()
 
     -- RU: Проверяем, что клиент действительно ожидал подтверждения.
     -- EN: Verify that the client was actually waiting for confirmation.
@@ -114,28 +135,22 @@ end)
 -- EN: Force resync handler after a gc_core restart.
 -- EN: The client does NOT automatically re-spawn the player. It reports its
 -- EN: readiness (resyncReady) to the server, and the server decides what to do.
-RegisterNetEvent(GCEvents.Client.forceResync, function()
+GCClientSecurity.RegisterServerEvent(GCEvents.Client.forceResync, function()
     -- RU: Сбрасываем клиентское состояние.
     -- EN: Reset the client state.
     GCClientState.Reset()
+    GCClientReadiness.Reset()
 
-    -- RU: Определяем, жив ли ped игрока (информация для сервера, не доверять целиком).
-    -- EN: Determine whether the player ped is alive (information for the server, not fully trusted).
-    local ped = PlayerPedId()
-    local isPedAlive = ped ~= 0 and DoesEntityExist(ped) and IsPedAlive(ped)
-
-    -- RU: Отправляем серверу ответ о готовности к resync.
-    -- EN: Send the resync-ready response to the server.
-    TriggerServerEvent(GCEvents.Server.resyncReady, {
-        protocolVersion = GCVersion.GetProtocolVersion(),
-        clientVersion = GCVersion.GetString(),
-        isPedAlive = isPedAlive
-    })
+    -- RU: Ответ отправляется только после реальной готовности клиента. Если
+    -- RU: параллельно уже идёт обычный clientReady, он сам завершит recovery.
+    -- EN: Reply only after the client is actually ready. If the normal clientReady
+    -- EN: wait is already active, that handshake will complete recovery itself.
+    GCClientReadiness.WaitForReadiness('resync')
 end)
 
 -- RU: Обработчик уведомления.
 -- EN: Notification handler.
-RegisterNetEvent(GCEvents.Client.notify, function(payload)
+GCClientSecurity.RegisterServerEvent(GCEvents.Client.notify, function(payload)
     local valid = GCValidation.Notification(payload)
 
     if not valid then

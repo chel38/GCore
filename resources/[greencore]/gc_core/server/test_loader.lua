@@ -13,12 +13,14 @@ if testsEnabled then
         'tests/sessions_test.lua',
         'tests/connection_test.lua',
         'tests/spawn_test.lua',
+        'tests/spawn_verification_integration_test.lua',
         'tests/protocol_test.lua',
         'tests/ped_provider_test.lua',
         'tests/logger_test.lua',
         'tests/rate_limit_test.lua',
         'tests/notifications_test.lua',
         'tests/runtime_test.lua',
+        'tests/client_event_security_test.lua',
         'tests/api_test.lua',
         'tests/run.lua'
     }

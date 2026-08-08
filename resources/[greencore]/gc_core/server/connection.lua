@@ -173,6 +173,15 @@ function GCConnection.HandleConnecting(playerName, setKickReason, deferrals)
     -- RU: Определяем язык для сообщений игроку.
     -- EN: Determine the language for player-facing messages.
     local locale = GCConfig.General.locale or 'en'
+    -- EN: The temporary player source has a deliberately limited native lifetime.
+    -- Read identifiers before the first yield, matching the official Cfx flow.
+    -- RU: Временный source игрока имеет намеренно ограниченный lifetime native.
+    -- Читаем идентификаторы до первого yield, как в официальном Cfx flow.
+    local identifiers = type(temporarySource) == 'number'
+        and GCIdentifiers.GetAll(temporarySource)
+        or {}
+    local deferralStartedAt = GCUtils.NowMs()
+    local deferralTimeoutMs = GCConfig.Connection.deferralTimeoutMs or 15000
 
     -- RU: Флаг завершения deferrals. Защищает от повторного вызова done().
     -- EN: Deferral completion flag. Guards against calling done() twice.
@@ -186,7 +195,39 @@ function GCConnection.HandleConnecting(playerName, setKickReason, deferrals)
         end
 
         deferralHandled = true
-        deferrals.done(message)
+
+        -- EN: Cfx's runtime-owned function reference distinguishes no arguments
+        -- from one explicit nil argument. The latter can crash the Mono bridge.
+        -- RU: Runtime-owned function reference Cfx различает отсутствие аргументов
+        -- и один явный nil; второй вариант может аварийно завершить Mono bridge.
+        if message == nil then
+            deferrals.done()
+        else
+            deferrals.done(message)
+        end
+    end
+
+    -- EN: The Cfx deferrals object contains runtime-owned function references.
+    -- Keeping those references in SetTimeout after playerConnecting returns can
+    -- crash FXServer's Mono bridge. Validation below is synchronous and bounded,
+    -- so the deadline is checked inside the original event coroutine instead.
+    --
+    -- RU: Объект Cfx deferrals содержит function reference, которыми владеет
+    -- runtime. Их захват в SetTimeout после завершения playerConnecting может
+    -- аварийно завершить Mono bridge FXServer. Проверки ниже синхронны и
+    -- ограничены, поэтому deadline проверяется в исходной coroutine события.
+    local function finishIfTimedOut()
+        if GCUtils.NowMs() - deferralStartedAt < deferralTimeoutMs then
+            return false
+        end
+
+        GCSessions.RemovePendingConnection(temporarySource)
+
+        local message = GC_T(locale, 'connection.timeout')
+        setKickReason(message)
+        done(message)
+
+        return true
     end
 
     -- RU: Шаг 1: начинаем deferrals.
@@ -229,24 +270,10 @@ function GCConnection.HandleConnecting(playerName, setKickReason, deferrals)
     -- EN: Step 4: skip another tick.
     Wait(0)
 
-    -- RU: Добавляем тайм-аут для deferrals, чтобы не зависнуть навсегда.
-    -- EN: Add a timeout for deferrals to avoid hanging forever.
-    SetTimeout(GCConfig.Connection.deferralTimeoutMs, function()
-        -- RU: Если подключение уже обработано, ничего не делаем.
-        -- EN: If the connection was already handled, do nothing.
-        if deferralHandled then
-            return
-        end
+    if finishIfTimedOut() then
+        return
+    end
 
-        -- RU: Удаляем pending connection, если она была создана.
-        -- EN: Remove the pending connection if it was created.
-        GCSessions.RemovePendingConnection(temporarySource)
-
-        -- RU: Завершаем ожидание с сообщением об истечении времени.
-        -- EN: End the wait with a timeout message.
-        setKickReason(GC_T(locale, 'connection.timeout'))
-        done(GC_T(locale, 'connection.timeout'))
-    end)
 
     -- RU: Проверяем имя игрока.
     -- EN: Validate the player name.
@@ -258,9 +285,9 @@ function GCConnection.HandleConnecting(playerName, setKickReason, deferrals)
         return
     end
 
-    -- RU: Собираем идентификаторы игрока.
-    -- EN: Collect the player identifiers.
-    local identifiers = GCIdentifiers.GetAll(temporarySource)
+    if finishIfTimedOut() then
+        return
+    end
 
     -- RU: Проверяем наличие обязательного идентификатора.
     -- EN: Validate the presence of the mandatory identifier.
@@ -282,6 +309,10 @@ function GCConnection.HandleConnecting(playerName, setKickReason, deferrals)
             done(GC_T(locale, 'connection.duplicate'))
             return
         end
+    end
+
+    if finishIfTimedOut() then
+        return
     end
 
     -- RU: Определяем основной идентификатор и его тип.
@@ -441,55 +472,7 @@ function GCConnection.HandleJoining(oldSource)
     return true
 end
 
---- RU:
---- Обрабатывает готовность клиента (clientReady).
---- Проверяет строгое совпадение версии протокола перед продолжением lifecycle.
----
---- EN:
---- Handles client readiness (clientReady).
---- Verifies strict protocol version match before continuing the lifecycle.
----
---- @param playerSource number FiveM server player source
---- @param payload table Client readiness payload
-function GCConnection.HandleClientReady(playerSource, payload)
-    -- RU: Проверяем, что сессия существует.
-    -- EN: Verify that the session exists.
-    local session = GCSessions.Get(playerSource)
-
-    if not session then
-        return
-    end
-
-    -- RU: Проверяем, что игрок находится в состоянии joining.
-    -- EN: Verify that the player is in the joining state.
-    if not GCStates.Is(playerSource, 'joining') then
-        return
-    end
-
-    -- RU: Строгая проверка версии протокола.
-    -- RU: Недостаточно проверить тип — версия должна точно совпадать.
-    -- EN: Strict protocol version check.
-    -- EN: Checking the type is not enough — the version must match exactly.
-    local protocolMatches, protocolError = GCValidation.ProtocolMatches(payload.protocolVersion)
-
-    if not protocolMatches then
-        GCLogger.Warn('GC-PROTOCOL-MISMATCH-001', 'Client protocol version is incompatible', {
-            source = playerSource,
-            clientProtocol = payload.protocolVersion,
-            serverProtocol = GCVersion.GetProtocolVersion()
-        })
-
-        -- RU: Не продолжаем spawn при несовместимом протоколе.
-        -- EN: Do not continue the spawn with an incompatible protocol.
-        TriggerClientEvent(GCEvents.Client.spawnRejected, playerSource, {
-            errorCode = 'GC-PROTOCOL-MISMATCH-001',
-            retryable = false
-        })
-        return
-    end
-
-    -- RU: Сохраняем метаданные клиента.
-    -- EN: Save the client metadata.
+local function storeHandshakeMetadata(session, payload)
     session.metadata.clientVersion = payload.clientVersion
     session.metadata.protocolVersion = payload.protocolVersion
 
@@ -497,97 +480,166 @@ function GCConnection.HandleClientReady(playerSource, payload)
         session.metadata.locale = payload.locale
     end
 
-    -- RU: Переводим игрока в состояние client_ready.
-    -- EN: Move the player to the client_ready state.
-    local success, errorCode = GCStates.Set(playerSource, 'client_ready', 'client_reported_ready')
-
-    if not success then
-        return
+    if payload.isPedAlive ~= nil then
+        -- RU: Это только диагностическая подсказка, а не authoritative state.
+        -- EN: This is diagnostic metadata only, never authoritative state.
+        session.metadata.clientPedAliveHint = payload.isPedAlive == true
     end
-
-    -- RU: Отправляем клиенту подтверждение подключения.
-    -- EN: Send the connection acceptance to the client.
-    TriggerClientEvent(GCEvents.Client.connectionAccepted, playerSource, {
-        apiVersion = GCVersion.GetApiVersion(),
-        protocolVersion = GCVersion.GetProtocolVersion()
-    })
 end
 
---- RU:
---- Обрабатывает ответ о готовности к resync после рестарта (resyncReady).
---- Payload не доверяется полностью — используется только как информация.
---- Если игрок уже существует в мире (isPedAlive=true), сессия переходит
---- resyncing -> spawned без повторной телепортации. В противном случае
---- запускается нормальный spawn flow (resyncing -> spawn_pending).
----
---- EN:
---- Handles the resync-ready response after a restart (resyncReady).
---- The payload is not fully trusted — it is used only as information.
---- If the player already exists in the world (isPedAlive=true), the session moves
---- resyncing -> spawned without re-teleporting. Otherwise the normal spawn flow
---- is started (resyncing -> spawn_pending).
----
---- @param playerSource number FiveM server player source
---- @param payload table Resync-ready payload
-function GCConnection.HandleResyncReady(playerSource, payload)
-    -- RU: Проверяем, что сессия существует.
-    -- EN: Verify that the session exists.
-    local session = GCSessions.Get(playerSource)
+local function validateHandshakeProtocol(playerSource, payload)
+    local matches, errorCode = GCValidation.ProtocolMatches(payload.protocolVersion)
 
-    if not session then
-        return
+    if matches then
+        return true
     end
 
-    -- RU: Проверяем, что сессия восстановлена после рестарта и в resyncing.
-    -- EN: Verify that the session was recovered and is in resyncing.
-    if not session.recovered or not GCStates.Is(playerSource, 'resyncing') then
-        return
-    end
+    GCLogger.Warn('GC-PROTOCOL-MISMATCH-001', '[GC][RECOVERY] Client protocol version is incompatible', {
+        source = playerSource,
+        clientProtocol = payload.protocolVersion,
+        serverProtocol = GCVersion.GetProtocolVersion()
+    })
+    TriggerClientEvent(GCEvents.Client.spawnRejected, playerSource, {
+        errorCode = 'GC-PROTOCOL-MISMATCH-001',
+        retryable = false
+    })
+    return false, errorCode or 'GC-PROTOCOL-MISMATCH-001'
+end
 
-    -- RU: Сохраняем метаданные клиента.
-    -- EN: Save the client metadata.
-    session.metadata.clientVersion = payload.clientVersion
-    session.metadata.protocolVersion = payload.protocolVersion
+--- RU: Завершает recovery по фактическому состоянию server-side ped.
+--- RU: Обычный clientReady и совместимый resyncReady используют одну функцию.
+--- EN: Completes recovery from the actual server-side ped state. Both normal
+--- EN: clientReady and the compatible resyncReady use this function.
+local function handleRecoveryHandshake(playerSource, session, payload)
+    storeHandshakeMetadata(session, payload)
 
-    -- Client isPedAlive is retained as diagnostic metadata only. OneSync state is authoritative.
-    session.metadata.clientPedAliveHint = payload.isPedAlive == true
-    local authoritativePedAlive = GCPlayers.HasAuthoritativeLivePed(playerSource)
-
-    if authoritativePedAlive then
-        local success, errorCode = GCStates.Set(playerSource, 'spawned', 'resync_server_ped_alive')
+    if GCPlayers.HasAuthoritativeLivePed(playerSource) then
+        local success, errorCode = GCStates.Set(playerSource, 'spawned', 'recovery_server_ped_alive')
 
         if not success then
-            GCLogger.Warn('GC-RESYNC-002', 'Failed to transition recovered session to spawned', {
+            GCLogger.Warn('GC-RESYNC-002', '[GC][RECOVERY] Failed to restore spawned state', {
                 source = playerSource,
                 errorCode = errorCode
             })
-            return
+            return false, errorCode
         end
 
-        -- RU: Сообщаем клиенту, что он уже заспавнен, без повторной телепортации.
-        -- EN: Notify the client that it is already spawned, without re-teleporting.
+        session.recoveryCompletedAt = GCUtils.NowSec()
         TriggerClientEvent(GCEvents.Client.spawnConfirmed, playerSource, {
             decisionId = nil,
             state = 'spawned'
         })
-        return
+        return true
     end
 
-    -- RU: Ped отсутствует — запускаем нормальный spawn flow.
-    -- EN: The ped is missing — start the normal spawn flow.
-    local success, errorCode = GCStates.Set(playerSource, 'spawn_pending', 'resync_requires_respawn')
+    local pendingOk, pendingError = GCStates.Set(playerSource, 'spawn_pending', 'recovery_requires_respawn')
+
+    if not pendingOk then
+        GCLogger.Warn('GC-RESYNC-001', '[GC][RECOVERY] Failed to enter safe spawn flow', {
+            source = playerSource,
+            errorCode = pendingError
+        })
+        return false, pendingError
+    end
+
+    session.recoveryCompletedAt = GCUtils.NowSec()
+    return GCConnection.RequestSpawnForPlayer(playerSource)
+end
+
+--- RU: Идемпотентный handshake. Сервер сам выбирает normal/recovery/duplicate flow.
+--- EN: Idempotent handshake. The server selects normal/recovery/duplicate flow.
+--- @param playerSource number FiveM server player source
+--- @param payload table Client readiness payload
+--- @return boolean accepted
+--- @return string|nil errorCode
+function GCConnection.HandleClientReady(playerSource, payload)
+    local session = GCSessions.Get(playerSource)
+
+    if not session then
+        return false, 'GC-SESSION-001'
+    end
+
+    local protocolOk, protocolError = validateHandshakeProtocol(playerSource, payload)
+
+    if not protocolOk then
+        return false, protocolError
+    end
+
+    if GCStates.Is(playerSource, 'resyncing') and session.recovered then
+        return handleRecoveryHandshake(playerSource, session, payload)
+    end
+
+    if GCStates.Is(playerSource, 'spawned') then
+        storeHandshakeMetadata(session, payload)
+
+        if not GCPlayers.HasAuthoritativeLivePed(playerSource) then
+            GCLogger.Warn('GC-RECOVERY-ENTITY-MISSING', '[GC][RECOVERY] Duplicate hello has no authoritative live ped', {
+                source = playerSource
+            })
+            return false, 'GC-RECOVERY-ENTITY-MISSING'
+        end
+
+        -- RU: Восстанавливаем локальное состояние перезапущенного клиента.
+        -- EN: Restore the local state of a restarted client resource.
+        TriggerClientEvent(GCEvents.Client.spawnConfirmed, playerSource, {
+            decisionId = nil,
+            state = 'spawned'
+        })
+        return true
+    end
+
+    if GCStates.Is(playerSource, 'client_ready') then
+        -- RU: Повторяем потерянный ACK; клиентский handler сам идемпотентен.
+        -- EN: Re-send a lost ACK; the client handler is itself idempotent.
+        TriggerClientEvent(GCEvents.Client.connectionAccepted, playerSource, {
+            apiVersion = GCVersion.GetApiVersion(),
+            protocolVersion = GCVersion.GetProtocolVersion()
+        })
+        return true
+    end
+
+    if not GCStates.Is(playerSource, 'joining') then
+        -- RU: Duplicate/stale hello не меняет state и не продлевает timeout.
+        -- EN: Duplicate/stale hello changes no state and extends no timeout.
+        return true
+    end
+
+    storeHandshakeMetadata(session, payload)
+    local success, errorCode = GCStates.Set(playerSource, 'client_ready', 'client_reported_ready')
 
     if not success then
-        GCLogger.Warn('GC-RESYNC-001', 'Failed to transition recovered session to spawn_pending', {
-            source = playerSource,
-            errorCode = errorCode
-        })
-        return
+        return false, errorCode
     end
 
-    -- RU: Создаём и отправляем новое решение о спавне.
-    -- EN: Create and send a new spawn decision.
-    GCConnection.RequestSpawnForPlayer(playerSource)
+    TriggerClientEvent(GCEvents.Client.connectionAccepted, playerSource, {
+        apiVersion = GCVersion.GetApiVersion(),
+        protocolVersion = GCVersion.GetProtocolVersion()
+    })
+    return true
+end
+
+--- RU: Backward-compatible resyncReady alias того же state-aware handshake.
+--- EN: Backward-compatible resyncReady alias for the same state-aware handshake.
+function GCConnection.HandleResyncReady(playerSource, payload)
+    local session = GCSessions.Get(playerSource)
+
+    if not session then
+        return false, 'GC-SESSION-001'
+    end
+
+    local protocolOk, protocolError = validateHandshakeProtocol(playerSource, payload)
+
+    if not protocolOk then
+        return false, protocolError
+    end
+
+    if GCStates.Is(playerSource, 'resyncing') and session.recovered then
+        return handleRecoveryHandshake(playerSource, session, payload)
+    end
+
+    -- RU: Старый/повторный resyncReady безопасно обрабатывается как hello.
+    -- EN: A stale/duplicate resyncReady is safely handled as a hello.
+    return GCConnection.HandleClientReady(playerSource, payload)
 end
 
 --- RU:
@@ -611,5 +663,8 @@ function GCConnection.RequestSpawnForPlayer(playerSource)
             errorCode = spawnError,
             retryable = false
         })
+        return false, spawnError
     end
+
+    return true
 end

@@ -20,37 +20,32 @@
 
 ## Готовность клиента
 
-Клиент не отправляет запрос сразу после загрузки файла.
-Он ждёт:
+Границей готовности является сама загрузка client resource. До первого
+server-authoritative spawn FiveM network/player/PED native ещё могут возвращать
+inactive, поэтому они не блокируют hello.
 
-- активности сетевой сессии;
-- существования игрока;
-- существования `PlayerPedId()`;
-- корректного состояния ped.
+Раннее network event может прийти до финального server state `joining`. Поэтому
+клиент повторяет hello с настраиваемым интервалом до валидного server ACK. И
+число попыток, и общий deadline ограничены.
 
 ```lua
 CreateThread(function()
-    local startedAt = GetGameTimer()
-    local timeoutMs = 30000
-
-    while not NetworkIsSessionStarted() do
-        if GetGameTimer() - startedAt >= timeoutMs then
-            GCClientDiagnostics.Report('GC-CLIENT-READY-001')
-            return
-        end
-
-        Wait(250)
+    for attempt = 1, GCConfig.Connection.clientHelloMaxAttempts do
+        GCClientReadiness.ReportReady()
+        if serverAckReceived then break end
+        Wait(GCConfig.Connection.clientHelloRetryIntervalMs)
     end
-
-    GCClientReadiness.ReportReady()
 end)
 ```
+
+Валидные `connectionAccepted`, `spawnApproved`, `spawnRejected` или
+`spawnConfirmed` останавливают retry loop. Все они защищены server-origin guard.
 
 ## Payload готовности
 
 ```lua
 {
-    clientVersion = '0.1.2-alpha',
+    clientVersion = '0.1.3-alpha',
     protocolVersion = 1,
     locale = 'ru'
 }

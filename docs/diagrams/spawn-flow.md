@@ -7,32 +7,32 @@ sequenceDiagram
     participant O as OneSync entity state
 
     C->>S: requestSpawn {}
-    S->>S: Validate state + action limit
-    S->>S: New one-time decision + untried ped
-    S-->>C: spawnApproved(decisionId, ped, position, attempt)
+    S->>S: Validate state + rate limit
+    S->>S: Create one-time decision
+    S->>S: spawning → spawn_confirming
+    S-->>C: spawnApproved(decisionId, ped, position)
     C->>C: Model, coordinates, collision
     C->>S: confirmSpawn(decisionId)
     S->>S: Validate source/session/state/TTL/replay
-    loop Bounded verification window
-        S->>O: Read ped, owner, health, model, coords
+    loop Bounded verification
+        S->>O: Ped, entity, owner, health, model, coords
         O-->>S: Authoritative snapshot
+        S->>S: Re-check session + decision
     end
-    alt Snapshot matches
+    alt Valid snapshot
         S->>S: spawn_confirming → spawned
         S-->>C: spawnConfirmed
-    else Snapshot or client spawn failed
-        S->>S: Consume old decision + remember failed model
-        alt Attempts remain
-            S->>S: spawn_confirming → spawn_pending
-            S->>S: Create new ID and ped
-            S-->>C: spawnApproved(new decision)
-        else Exhausted
-            S->>S: → error
-            S-->>C: spawnRejected(retryable=false)
+    else Classified failure
+        S->>S: Consume old ID
+        alt MODEL and limits remain
+            S->>S: New decision + different PED
+        else ENTITY/COLLISION/POSITION/TIMEOUT and limits remain
+            S->>S: New decision + same PED
+        else DECISION/SESSION/SECURITY/UNKNOWN
+            S->>S: → error (no retry)
         end
     end
 ```
 
-The client confirmation is only a request to verify. The server does not enter
-`spawned` until the OneSync snapshot matches the immutable decision. Every retry
-invalidates the old ID; decision IDs are correlation values, not credentials.
+Client confirmation is only a verification request. Every retry is bounded and
+cancelable; only MODEL failures exclude the current PED.

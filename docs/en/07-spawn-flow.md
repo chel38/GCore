@@ -1,168 +1,91 @@
-# Spawn Flow / Поток спавна
+# Spawn flow
 
-## Level 1. In simple words
+## In simple words
 
-When the client is ready, the **server** decides where and with which model the player spawns.
-The server randomly picks a PED model from a whitelist.
-The client performs the spawn but does NOT consider it complete by itself.
-Only the server confirms the spawn (`spawnConfirmed`).
-
-## Level 2. Technical explanation
-
-1. The server picks the PED model via `GCPedProvider.Resolve`.
-2. The server picks the location via `GCSpawnLocationProvider.Resolve`.
-3. The server creates a `spawnDecision` containing `ped = { name, hash }`.
-4. The client receives `spawnApproved`, loads the model, and performs the spawn.
-5. The client moves to `spawn_confirming` and sends `confirmSpawn`.
-6. The server validates the decision atomically and moves the player to `spawned`.
-7. The server sends `spawnConfirmed`, and only then does the client set `spawned=true`.
+The client asks. The server validates, chooses the PED and coordinates, and
+creates a one-time decision. The client executes it. The server then reads the
+actual OneSync entity and only commits `spawned` if it matches the decision.
 
 ## Diagram
 
 ```mermaid
 sequenceDiagram
-    participant P as Player
-    participant F as FiveM
+    participant C as Client
     participant S as gc_core Server
-    participant C as gc_core Client
-
-    P->>F: Connect
-    F->>S: playerConnecting
-    S->>S: deferrals.defer()
-    S->>S: Validate identifiers
-    S->>S: Create pending connection
-    S-->>F: deferrals.done()
-
-    F->>S: playerJoining(oldSource)
-    S->>S: Promote temporary source to final source
-
-    C->>S: clientReady
-    S->>S: Validate protocol
-    S->>S: Select random PED
-    S->>S: Create spawn decision
-
-    S->>C: spawnApproved
-    C->>C: Load PED model
-    C->>C: Fade out
-    C->>C: SetPlayerModel
-    C->>C: Load collision
-    C->>C: Place PED
-    C->>C: Fade in
-
+    participant O as OneSync
+    C->>S: requestSpawn {}
+    S->>S: Validate session/state/rate limit
+    S->>S: Create decision + state spawn_confirming
+    S-->>C: spawnApproved(decisionId, ped, position)
+    C->>C: Load model/collision and place ped
     C->>S: confirmSpawn(decisionId)
-    S->>S: Validate decision
-    S->>S: state = spawned
-    S->>S: Consume decision
-
-    S->>C: spawnConfirmed
-    C->>C: Local state = spawned
+    S->>S: Validate source/session/state/TTL/replay
+    loop Bounded and cancelable verification
+        S->>O: Get ped/entity/owner/health/model/coords
+        O-->>S: Authoritative snapshot
+    end
+    alt Snapshot matches
+        S->>S: spawn_confirming → spawned
+        S->>S: Consume decision
+        S-->>C: spawnConfirmed
+    else Snapshot fails
+        S->>S: Classify error and apply bounded policy
+        S-->>C: spawnRejected(retryable)
+    end
 ```
 
-## Server spawn decision
+The internal `spawn_confirming` transition happens **before** `spawnApproved` is
+sent, so an immediate client response cannot race an unfinished server state.
+
+## Server verification
+
+`confirmSpawn` carries only `decisionId`; it is not proof. Production
+`GCSpawn.Confirm` checks:
+
+1. decision exists and is not expired/consumed;
+2. event source and session own the decision;
+3. lifecycle is `spawn_confirming`;
+4. `GetPlayerPed` and `DoesEntityExist`;
+5. `NetworkGetEntityOwner(ped) == playerSource`;
+6. `GetEntityHealth` meets the configured minimum;
+7. `GetEntityModel` matches the server-selected PED;
+8. `GetEntityCoords` is within tolerance of the decision;
+9. the same session/decision still exists after the native boundary.
+
+Verification stops when the player disconnects, the session/decision changes, the
+decision expires, the resource stops, state changes, the attempt limit is reached,
+or timeout expires.
+
+## Retry policy
+
+Every retry consumes the old ID and creates a new decision. The model changes only
+for a MODEL failure.
+
+| Category | Examples | Action |
+| --- | --- | --- |
+| MODEL | invalid/load timeout/model mismatch | new decision, different PED |
+| ENTITY | missing/dead entity | limited new decision, same PED |
+| COLLISION | collision timeout | limited same PED |
+| POSITION | replication/mismatch | bounded verification, then limited same PED |
+| VERIFICATION/TIMEOUT | snapshot/verification timeout | limited same PED |
+| DECISION | unknown/expired/consumed/source mismatch | reject; no spawn retry |
+| SESSION | session mismatch/change/state error | reject; cancel transaction |
+| SECURITY | wrong network owner | reject and security log |
+| UNKNOWN | unregistered code | fail closed |
+
+Limits are `maxTotalAttempts`, `maxSamePedRetries`, `maxDifferentPedRetries`, and
+`verification.maxAttempts` in `config/spawn.lua`. No per-player frame loop exists.
+
+## Client execution example
 
 ```lua
-local spawnDecision = {
-    id = 'gc:spawn:generated-id',
-    sessionId = 'gc:session:generated-id',
-    source = playerSource,
-
-    position = {
-        x = -1037.65,
-        y = -2737.72,
-        z = 20.17,
-        heading = 329.0
-    },
-
-    ped = {
-        name = 'a_m_y_business_01',
-        hash = 0x...
-    },
-
-    createdAt = os.time(),
-    expiresAt = os.time() + 30,
-
-    confirmed = false,
-    consumed = false
-}
+-- The client executes only the immutable server payload.
+TriggerServerEvent('gc_core:server:confirmSpawn', {
+    decisionId = payload.decisionId
+})
 ```
 
-The decision is created **only by the server**, and the random PED is chosen exactly once.
+Client coordinates, PED model, alive state, and confirmation are never accepted as
+authoritative truth.
 
-The client cannot:
-
-- choose coordinates;
-- choose a PED model;
-- create a Decision ID;
-- extend the expiry time;
-- confirm someone else's decision.
-
-## Atomic confirmation
-
-The confirmation order is strict:
-
-```text
-VALIDATE
-   ↓
-STATE TRANSITION (spawn_confirming → spawned)
-   ↓
-MARK DECISION CONFIRMED
-   ↓
-MARK DECISION CONSUMED
-   ↓
-REMOVE ACTIVE DECISION
-   ↓
-CLEAR session.spawnDecision
-   ↓
-SEND spawnConfirmed
-```
-
-If the state transition fails, the decision **stays active** for retry/timeout and is
-not consumed prematurely.
-
-## Client spawn
-
-The client performs:
-
-1. Receiving the server decision.
-2. Validating the payload (`GCValidation.SpawnApproved`).
-3. Fading out the screen with a timeout.
-4. Validating the model: `IsModelInCdimage`, `IsModelValid`, `IsModelAPed`.
-5. Loading the model with a timeout.
-6. `SetPlayerModel`.
-7. Re-acquiring the ped (the old handle is stale).
-8. Setting the server-provided coordinates.
-9. Loading the collision with a timeout.
-10. Clearing the ped tasks.
-11. Unfreezing the ped and restoring control.
-12. Moving to `spawn_confirming` (NOT `spawned`).
-13. Sending `confirmSpawn(decisionId)`.
-
-The client **never** sets `spawned=true` by itself. Only the server does it through
-the `spawnConfirmed` event.
-
-## Used natives
-
-```lua
-IsModelInCdimage(modelHash)
-IsModelValid(modelHash)
-IsModelAPed(modelHash)
-RequestModel(modelHash)
-HasModelLoaded(modelHash)
-SetPlayerModel(PlayerId(), modelHash)
-SetModelAsNoLongerNeeded(modelHash)
-SetEntityCoordsNoOffset(...)
-SetEntityHeading(...)
-RequestCollisionAtCoord(...)
-HasCollisionLoadedAroundEntity(...)
-FreezeEntityPosition(...)
-DoScreenFadeOut(...)
-DoScreenFadeIn(...)
-```
-
-## Random PED
-
-See [Random PED Spawn](random-ped-spawn.md) for details.
-
-## Next step
-
-Go to [Configuration](08-configuration.md).
+Continue with [configuration](08-configuration.md).

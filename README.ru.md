@@ -22,7 +22,15 @@ GreenCore — это минимальный модульный движок дл
 
 ## Статус разработки
 
-**0.1.2-alpha** — стабилизированная early-alpha версия.
+**0.1.3-alpha** — финальная версия этапа стабилизации ядра.
+
+Core Resource Version: `0.1.3-alpha`
+
+Core API Version: `1`
+
+Network Protocol Version: `1`
+
+Core API Status: **Stable for module development**
 
 ## Возможности версии
 
@@ -79,7 +87,7 @@ ensure gc_core
 8. Найдите сообщение:
 
 ```text
-[GreenCore] [INFO] gc_core 0.1.2-alpha started successfully
+[GreenCore] [INFO] gc_core 0.1.3-alpha started successfully
 ```
 
 ## Конфигурация
@@ -108,7 +116,7 @@ resources/[greencore]/gc_core/
 | `GetApiVersion`          | number         | Версия API                |
 | `GetProtocolVersion`     | number         | Версия протокола          |
 | `GetVersion`             | table          | Версия `gc_core`          |
-| `GetVersionString`       | string         | Строка `0.1.2-alpha`      |
+| `GetVersionString`       | string         | Строка `0.1.3-alpha`      |
 | `IsPlayerConnected`      | boolean        | Проверяет сессию          |
 | `IsPlayerReady`          | boolean        | Проверяет готовность      |
 | `IsPlayerSpawned`        | boolean        | Проверяет спавн           |
@@ -127,6 +135,8 @@ resources/[greencore]/gc_core/
 - [Диаграммы](docs/diagrams/architecture.md)
 - [Runtime и txAdmin](docs/ru/18-runtime-txadmin.md)
 - [Миграция 0.1.1 → 0.1.2](docs/ru/migration/0.1.1-to-0.1.2.md)
+- [Контракт модулей v1](docs/ru/module-contract.md)
+- [Политика совместимости API](docs/ru/20-api-compatibility.md)
 
 ## Тестирование
 

@@ -6,6 +6,35 @@ All notable changes to this project are documented in this file.
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.3-alpha] - 2026-08-09
+
+### Исправлено / Fixed
+
+- Restart recovery больше не зависит от единственного `forceResync`: обычный
+  `clientReady` идемпотентно завершает recovered session.
+- Все server-only client events защищены проверкой FiveM server origin.
+- Spawn retry больше не blacklist PED при collision, position, ownership,
+  session или decision ошибках.
+- Spawn transaction повторно проверяет session/decision после native boundary.
+- `playerConnecting` больше не удерживает Cfx deferral references в timer и
+  вызывает успешный `deferrals.done()` без явного `nil`, устраняя Mono crash.
+- Initial client hello больше не зависит от pre-spawn network/player/PED native;
+  раннее событие повторяется до server ACK с bounded attempts/deadline.
+
+### Добавлено / Added
+
+- Декларативная spawn retry policy и раздельные bounded limits.
+- Полный production-path набор spawn verification integration tests.
+- Contract tests всех Public API v1 exports и защита identifier/session DTO.
+- Module Contract, API compatibility policy и синхронизированная RU|EN документация.
+
+### Изменено / Changed
+
+- `shared/version.lua` является единственным source of truth; validator извлекает
+  resource/API/protocol версии и сверяет manifest, README, CHANGELOG и release tag.
+- Network protocol остаётся v1: существующие события сохранены, recovery change
+  является additive/backward-compatible.
+
 ## [0.1.2-alpha] - 2026-08-08
 
 ### Исправлено / Fixed
