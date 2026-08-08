@@ -240,3 +240,10 @@ if ($failures.Count -gt 0) {
 }
 
 Write-Host "Repository validation passed ($($coreLuaFiles.Count) Lua files, $($markdownFiles.Count) Markdown files)."
+
+# EN: `git describe --exact-match` is expected to return 1 for ordinary,
+# untagged commits. Do not leak that probe status as the validator result.
+#
+# RU: `git describe --exact-match` ожидаемо возвращает 1 для обычных коммитов
+# без тега. Этот служебный код не должен становиться результатом валидатора.
+exit 0
