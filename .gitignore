@@ -1,0 +1,29 @@
+# RU: Файл игнорирования Git для GreenCore.
+# EN: Git ignore file for GreenCore.
+
+# RU: Системные файлы / System files.
+# EN: System files.
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# RU: Папка кэша редактора VS Code.
+# EN: VS Code editor cache folder.
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# RU: Временные файлы Lua.
+# EN: Temporary Lua files.
+*.tmp
+*.log
+
+# RU: Локальные тестовые артефакты.
+# EN: Local test artifacts.
+coverage/
+test-results/
+
+# RU: Локальные настройки FiveM (не должны попадать в репозиторий).
+# EN: Local FiveM settings (must not enter the repository).
+server-data/
