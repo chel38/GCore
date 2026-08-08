@@ -44,6 +44,10 @@ GCConstants = {
     -- EN: Maximum error reason length.
     maxErrorReasonLength = 256,
 
+    maxDecisionIdLength = 128,
+
+    maxPedModelLength = 64,
+
     -- RU: Список поддерживаемых типов идентификаторов.
     -- EN: List of supported identifier types.
     identifierTypes = {

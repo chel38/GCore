@@ -66,7 +66,7 @@ function GCSessions.CreatePendingConnection(temporarySource, playerName, identif
     -- RU: Генерируем уникальный идентификатор pending connection.
     -- EN: Generate a unique pending connection identifier.
     pendingCounter = pendingCounter + 1
-    local connectionId = ('gc:connection:%d:%s'):format(pendingCounter, GCUtils.GenerateUuid(GCConstants.sessionPrefix))
+    local connectionId = GCIds.NewCorrelationId(('gc:connection:%d'):format(pendingCounter))
 
     local nowSec = GCUtils.NowSec()
     local lifetimeMs = GCConfig.Connection.pendingConnectionLifetimeMs or 60000
@@ -228,7 +228,7 @@ function GCSessions.PromotePendingConnection(temporarySource, finalSource)
 
     -- RU: Генерируем Session ID.
     -- EN: Generate a Session ID.
-    local sessionId = GCUtils.GenerateUuid(GCConstants.sessionPrefix)
+    local sessionId = GCIds.NewSessionId()
 
     -- RU: Создаём активную сессию, перенося данные из pending connection.
     -- EN: Create the active session, carrying data from the pending connection.
@@ -256,6 +256,9 @@ function GCSessions.PromotePendingConnection(temporarySource, finalSource)
 
         spawnDecision = nil,
         lastPed = nil,
+        spawnAttempt = 0,
+        spawnRetries = 0,
+        attemptedPedModels = {},
 
         -- RU: Флаг восстановленной сессии после рестарта gc_core.
         -- EN: Flag of a recovered session after a gc_core restart.
@@ -325,7 +328,7 @@ function GCSessions.CreateRecoveredSession(finalSource, playerName, identifiers,
 
     -- RU: Генерируем Session ID.
     -- EN: Generate a Session ID.
-    local sessionId = GCUtils.GenerateUuid(GCConstants.sessionPrefix)
+    local sessionId = GCIds.NewSessionId()
 
     -- RU: Создаём восстановленную сессию.
     -- EN: Create the recovered session.
@@ -353,6 +356,9 @@ function GCSessions.CreateRecoveredSession(finalSource, playerName, identifiers,
 
         spawnDecision = nil,
         lastPed = nil,
+        spawnAttempt = 0,
+        spawnRetries = 0,
+        attemptedPedModels = {},
 
         -- RU: Флаг восстановленной сессии после рестарта.
         -- EN: Flag of a session recovered after a restart.

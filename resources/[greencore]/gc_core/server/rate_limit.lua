@@ -9,9 +9,29 @@ GCRateLimit = {}
 -- EN: Internal rate limit data storage.
 local rateData = {}
 
--- RU: Счётчик нарушений rate limit по игрокам.
--- EN: Rate limit violation counter per player.
+-- RU: Временные метки нарушений; записи вне окна удаляются.
+-- EN: Violation timestamps; entries outside the configured window expire.
 local violations = {}
+
+local function pruneViolations(playerSource, now)
+    local timestamps = violations[playerSource]
+
+    if type(timestamps) ~= 'table' then
+        return {}
+    end
+
+    local windowMs = GCConfig.Security.violationWindowMs or 60000
+    local retained = {}
+
+    for _, timestamp in ipairs(timestamps) do
+        if now - timestamp <= windowMs then
+            retained[#retained + 1] = timestamp
+        end
+    end
+
+    violations[playerSource] = retained
+    return retained
+end
 
 --- RU:
 --- Проверяет, не превышен ли лимит для действия игрока.
@@ -198,9 +218,19 @@ function GCRateLimit.RegisterViolation(playerSource)
         return false
     end
 
-    violations[playerSource] = (violations[playerSource] or 0) + 1
+    local now = GCUtils.NowMs()
+    local timestamps = pruneViolations(playerSource, now)
+    timestamps[#timestamps + 1] = now
+    violations[playerSource] = timestamps
 
-    local maxViolations = GCConfig.Security.maxViolationsBeforeKick or 10
+    local maxViolations = GCConfig.Security.maxViolationsPerWindow or 10
+    return #timestamps >= maxViolations
+end
 
-    return violations[playerSource] >= maxViolations
+function GCRateLimit.GetViolationCount(playerSource)
+    if type(playerSource) ~= 'number' then
+        return 0
+    end
+
+    return #pruneViolations(playerSource, GCUtils.NowMs())
 end

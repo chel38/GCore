@@ -32,5 +32,9 @@ GCConfig.Connection = {
 
     -- RU: Максимальное время ожидания готовности клиента в миллисекундах.
     -- EN: Maximum client readiness wait time in milliseconds.
-    clientReadyTimeoutMs = 30000
+    clientReadyTimeoutMs = 30000,
+
+    -- RU: Максимальное ожидание resyncReady после рестарта ресурса.
+    -- EN: Maximum wait for resyncReady after a resource restart.
+    resyncReadyTimeoutMs = 15000
 }

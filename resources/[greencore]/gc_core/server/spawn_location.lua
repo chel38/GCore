@@ -28,19 +28,19 @@ function GCSpawnLocationProvider.ValidateConfig()
         return false
     end
 
-    if type(default.x) ~= 'number' then
+    if not GCUtils.IsFiniteNumber(default.x) then
         return false
     end
 
-    if type(default.y) ~= 'number' then
+    if not GCUtils.IsFiniteNumber(default.y) then
         return false
     end
 
-    if type(default.z) ~= 'number' then
+    if not GCUtils.IsFiniteNumber(default.z) then
         return false
     end
 
-    if type(default.heading) ~= 'number' then
+    if not GCUtils.IsFiniteNumber(default.heading) then
         return false
     end
 

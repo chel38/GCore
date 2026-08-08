@@ -1,85 +1,40 @@
-# Security / Безопасность
+# Security
 
-## Level 1. In simple words
+Trust model: the client requests, the server validates and decides, the client
+executes, and the server independently verifies the result.
 
-GreenCore does not trust the client.
-The server validates every message from the client.
+## Trust boundaries
 
-## Level 2. Technical explanation
+- `source` comes only from the network event context.
+- Clients cannot choose session IDs, peds, coordinates, or server state.
+- Every payload is an exact allowlisted table with bounded strings and finite
+  numbers; NaN and infinities are rejected.
+- Handshakes require an exact protocol match.
+- Decision IDs are correlation values, not secrets. Authorization uses source,
+  current session, state, TTL, and one-time consumption.
+- `confirmSpawn` is not proof. During a bounded window the server verifies the
+  OneSync ped, entity existence, owner, health, model, and decision distance.
+- During recovery `isPedAlive` is diagnostic only; the server reads its own ped.
 
-The architecture is built around the rule:
+## Retry and replay
 
-```text
-Client requests → Server validates → Server decides → Client executes → Server confirms
-```
+Each spawn decision is one-time. On failure the old decision is removed, the model
+is added to `attemptedPedModels`, state returns to `spawn_pending`, and a new ID is
+created after a delay. Attempt/model counts are bounded. Replays, foreign sources,
+foreign sessions, expired IDs, and consumed IDs are rejected.
 
-## Mandatory rules
+## Rate limits
 
-1. Never trust the client.
-2. Do not accept `source` from the payload.
-3. Use the server `source` of the event.
-4. Do not accept spawn coordinates from the client.
-5. Do not accept a model from the client.
-6. Do not accept a player state from the client.
-7. Do not accept a Session ID from the client.
-8. Do not accept a Decision ID not created by the server.
-9. Validate the type of every value.
-10. Validate the length of every string.
-11. Limit the event frequency.
-12. Validate the lifecycle.
-13. Validate the decision expiry.
-14. Do not process one decision twice.
-15. Mask identifiers.
-16. Do not execute code from strings.
-17. Do not use unsafe global tables.
-18. Do not allow the client to directly change the server session.
-19. Do not create an automatic ban system.
-20. Do not hide critical errors.
+All five ingress actions have independent interval/window/maxAttempts settings.
+Violation timestamps expire after `violationWindowMs`; the kick threshold applies
+only to the current window. An invalid payload also counts as a violation.
 
-## Payload validation
+## Data and logs
 
-All client data is considered untrusted.
+The logger masks license, IP, Discord, and other sensitive keys automatically.
+`GetPlayerSession` does not expose identifiers or internal decisions. FXServer and
+txAdmin secrets live only in ignored `txData`, never in Git.
 
-```lua
-function GCValidation.ClientReady(payload)
-    if type(payload) ~= 'table' then
-        return false, 'GC-PAYLOAD-TYPE-001'
-    end
+Report vulnerabilities through [private vulnerability reporting](../../SECURITY.md).
 
-    if type(payload.clientVersion) ~= 'string' then
-        return false, 'GC-PAYLOAD-VERSION-001'
-    end
-
-    if #payload.clientVersion > 32 then
-        return false, 'GC-PAYLOAD-VERSION-002'
-    end
-
-    return true
-end
-```
-
-## Rate limit
-
-Each event has a frequency limit.
-
-```lua
-GCConfig.Security.rateLimits = {
-    clientReady = {
-        intervalMs = 3000,
-        maxAttempts = 3,
-        windowMs = 15000
-    }
-}
-```
-
-## Identifier masking
-
-```text
-license:12ab********************************90cd
-```
-
-The IP address does not appear in the regular log.
-
-## Next step
-
-Go to [Errors](13-errors.md).
+Continue with [errors](13-errors.md).

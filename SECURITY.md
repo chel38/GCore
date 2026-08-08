@@ -11,8 +11,15 @@
 Если вы обнаружили уязвимость, **не** создавайте публичный issue.
 If you find a vulnerability, do **not** create a public issue.
 
-Свяжитесь с командой GreenCore напрямую.
-Contact the GreenCore team directly.
+Используйте [приватное сообщение об уязвимости GitHub](https://github.com/chel38/GCore/security/advisories/new).
+Use [GitHub private vulnerability reporting](https://github.com/chel38/GCore/security/advisories/new).
+
+Укажите затронутую версию, минимальные шаги воспроизведения, влияние и
+предлагаемое исправление, если оно известно. Не публикуйте ключи сервера,
+идентификаторы игроков или другие секреты.
+
+Include the affected version, minimal reproduction steps, impact, and a proposed
+fix when known. Never include server keys, player identifiers, or other secrets.
 
 ## Принципы безопасности / Security principles
 

@@ -1,84 +1,43 @@
-# Configuration / Конфигурация
+# Configuration
 
-## Level 1. In simple words
-
-Configuration is the GreenCore settings.
-They are stored in Lua files in the `config/` folder.
-
-## Level 2. Technical explanation
-
-All configuration is stored in the global `GCConfig` table.
-Each file is responsible for its own area.
-
-## Configuration files
+Runtime configuration lives in `resources/[greencore]/gc_core/config/` and is
+loaded as Lua. Resource, API, and protocol versions are not duplicated here;
+`shared/version.lua` is the single source of truth.
 
 | File | Purpose |
-| ---- | ------- |
-| `general.lua` | General settings |
-| `connection.lua` | Connection settings |
-| `spawn.lua` | Spawn settings |
-| `security.lua` | Security settings |
-| `logging.lua` | Logging settings |
-| `diagnostics.lua` | Diagnostics settings |
+| --- | --- |
+| `general.lua` | locale, debug, development mode, test opt-in |
+| `connection.lua` | deferral, pending, clientReady, and resync timeouts |
+| `spawn.lua` | location, ped whitelist, retry, and server verification |
+| `security.lua` | action limits and the violation window |
+| `logging.lua` | level and sensitive-data masking |
+| `diagnostics.lua` | diagnostic messages |
 
-## Example: `general.lua`
+Critical spawn verification settings:
 
 ```lua
-GCConfig.General = {
-    locale = 'ru',
-    fallbackLocale = 'en',
-
-    debug = false,
-    developmentMode = true,
-
-    apiVersion = 1,
-    protocolVersion = 1
+verification = {
+    enabled = true,
+    timeoutMs = 3000,
+    intervalMs = 100,
+    positionTolerance = 8.0,
+    minimumHealth = 1
 }
 ```
 
-## Example: `spawn.lua`
+Do not disable `verification.enabled` on a public server. A client confirmation
+contains only `decisionId`; the server reads the OneSync entity, ownership, model,
+health, and coordinates itself.
 
-```lua
-GCConfig.Spawn = {
-    default = {
-        x = -1037.65,
-        y = -2737.72,
-        z = 20.17,
-        heading = 329.0,
-        model = `mp_m_freemode_01`
-    },
+Retry is bounded by both `maxAttempts` and `maxModelAttempts`. A failed model is
+added to `attemptedPedModels`, the old decision is invalidated, and a new decision
+gets a new ID and, when possible, a different model. Fallback is used only after
+suitable models are exhausted.
 
-    decisionLifetimeMs = 30000,
-    modelLoadTimeoutMs = 10000,
-    collisionLoadTimeoutMs = 10000,
-    clientSpawnTimeoutMs = 20000,
+Rate limits are independent for `clientReady`, `requestSpawn`, `confirmSpawn`,
+`reportClientError`, and `resyncReady`. `violationWindowMs` expires old violations;
+`maxViolationsPerWindow` is not a lifetime session counter.
 
-    fadeOutDurationMs = 500,
-    fadeInDurationMs = 1000
-}
-```
+For production, keep tests disabled and set `developmentMode` to `false`.
 
-## Rules
-
-- Configuration is stored **only** in Lua files.
-- JSON, YAML, XML, TOML, INI are not allowed.
-- Each parameter has a bilingual comment.
-- Coordinates are not hardcoded in the main logic.
-
-## Changing the spawn point
-
-Open `config/spawn.lua` and change the coordinates:
-
-```lua
-default = {
-    x = 0.0,
-    y = 0.0,
-    z = 71.0,
-    heading = 0.0,
-    model = `mp_m_freemode_01`
-}
-```
-
-## Next step
-
-Go to [Server API](09-server-api.md).
+Continue with the [server API](09-server-api.md).

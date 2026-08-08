@@ -22,7 +22,7 @@ Connection → Validation → Session → Client readiness → Spawn → Confirm
 
 ## Development status
 
-**0.1.0** — first working version.
+**0.1.2-alpha** — stabilized early-alpha release.
 
 ## Version features
 
@@ -32,6 +32,8 @@ Connection → Validation → Session → Client readiness → Spawn → Confirm
 - Player state management
 - Network event rate limiting
 - Server-side spawn decision
+- Server-side OneSync ped, ownership, model, and position verification
+- Recovery without trusting the client's `isPedAlive` hint
 - Client spawn with Lua natives
 - Public API v1
 - RU|EN localization
@@ -77,7 +79,7 @@ ensure gc_core
 8. Look for the message:
 
 ```text
-[GreenCore] [INFO] gc_core 0.1.0 started successfully
+[GreenCore] [INFO] gc_core 0.1.2-alpha started successfully
 ```
 
 ## Configuration
@@ -104,7 +106,9 @@ Server exports:
 | Export                   | Returns        | Purpose                   |
 | ------------------------ | -------------- | ------------------------- |
 | `GetApiVersion`          | number         | API version               |
+| `GetProtocolVersion`     | number         | Protocol version          |
 | `GetVersion`             | table          | `gc_core` version         |
+| `GetVersionString`       | string         | `0.1.2-alpha`             |
 | `IsPlayerConnected`      | boolean        | Checks session            |
 | `IsPlayerReady`          | boolean        | Checks readiness          |
 | `IsPlayerSpawned`        | boolean        | Checks spawn              |
@@ -121,10 +125,12 @@ Server exports:
 - [Documentation EN](docs/en/00-introduction.md)
 - [Документация RU](docs/ru/00-introduction.md)
 - [Diagrams](docs/diagrams/architecture.md)
+- [Runtime and txAdmin](docs/en/18-runtime-txadmin.md)
+- [Migration 0.1.1 → 0.1.2](docs/en/migration/0.1.1-to-0.1.2.md)
 
 ## Testing
 
-All tests are written in Lua:
+All tests are written in Lua and are loaded only after explicit `gc_runTests 1` opt-in:
 
 ```text
 resources/[greencore]/gc_core/tests/

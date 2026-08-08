@@ -109,7 +109,10 @@ GCTest.Register('spawn.confirm', function()
 
     GCTest.ExpectNotNil(decision, 'decision is created for confirmation test')
 
+    local verificationEnabled = GCConfig.Spawn.verification.enabled
+    GCConfig.Spawn.verification.enabled = false
     local success, confirmError = GCSpawn.Confirm(21, decision.id)
+    GCConfig.Spawn.verification.enabled = verificationEnabled
 
     GCTest.ExpectTrue(success, 'spawn confirmation succeeds')
     GCTest.ExpectNil(confirmError, 'no error on confirmation')
@@ -135,7 +138,10 @@ GCTest.Register('spawn.confirm_duplicate', function()
 
     local decision, _ = GCSpawn.Request(22)
 
+    local verificationEnabled = GCConfig.Spawn.verification.enabled
+    GCConfig.Spawn.verification.enabled = false
     local success1 = GCSpawn.Confirm(22, decision.id)
+    GCConfig.Spawn.verification.enabled = verificationEnabled
     GCTest.ExpectTrue(success1, 'first confirmation succeeds')
 
     -- RU: Повторное подтверждение должно быть отклонено, т.к. решение потреблено.
@@ -231,11 +237,45 @@ GCTest.Register('spawn.retry_from_confirming', function()
 
     local session = GCSessions.Get(26)
 
-    GCTest.ExpectNotNil(decision, 'retry decision exists')
-    GCTest.ExpectTrue(GCStates.Is(26, 'spawn_confirming'), 'retry keeps spawn_confirming state')
+    GCTest.ExpectNotNil(decision, 'initial decision exists')
+    GCTest.ExpectTrue(GCStates.Is(26, 'spawn_pending'), 'retry returns to spawn_pending')
     GCTest.ExpectEqual(session and session.spawnRetries, 1, 'retry counter is incremented')
-    GCTest.ExpectFalse(decision.consumed, 'retry decision remains unconsumed')
+    GCTest.ExpectTrue(decision.consumed, 'old decision is invalidated before retry')
+    GCTest.ExpectNil(session.spawnDecision, 'old decision is detached from the session')
+
+    local nextDecision, nextError = GCSpawn.Request(26)
+    GCTest.ExpectNotNil(nextDecision, 'retry creates a new decision')
+    GCTest.ExpectNil(nextError, 'new retry decision has no error')
+    GCTest.ExpectFalse(nextDecision.id == decision.id, 'retry decision id is new')
+    GCTest.ExpectFalse(nextDecision.ped.name == decision.ped.name, 'failed ped model is not reused')
 
     GCSpawn.RemovePlayerDecisions(26)
     GCSessions.Remove(26, 'test_cleanup')
 end)
+
+GCTest.Register('spawn.server_snapshot_validation', function()
+    local decision = {
+        source = 27,
+        ped = { hash = 1234 },
+        position = { x = 10.0, y = 20.0, z = 30.0 }
+    }
+    local snapshot = {
+        exists = true,
+        alive = true,
+        owner = 27,
+        model = 1234,
+        position = { x = 11.0, y = 20.0, z = 30.0 }
+    }
+
+    local valid = GCSpawn.ValidateSpawnSnapshot(decision, snapshot)
+    GCTest.ExpectTrue(valid, 'matching authoritative ped snapshot is accepted')
+
+    snapshot.owner = 99
+    valid = GCSpawn.ValidateSpawnSnapshot(decision, snapshot)
+    GCTest.ExpectFalse(valid, 'foreign entity ownership is rejected')
+
+    snapshot.owner = 27
+    snapshot.position.x = 1000.0
+    valid = GCSpawn.ValidateSpawnSnapshot(decision, snapshot)
+    GCTest.ExpectFalse(valid, 'out-of-range position is rejected')
+end, 'security')

@@ -3,19 +3,33 @@
 
 -- RU: Обработчик подтверждения подключения.
 -- EN: Connection acceptance handler.
-RegisterNetEvent('gc_core:client:connectionAccepted', function(payload)
+RegisterNetEvent(GCEvents.Client.connectionAccepted, function(payload)
+    local valid, errorCode = GCValidation.ConnectionAccepted(payload)
+
+    if not valid then
+        GCClientDiagnostics.Report(errorCode)
+        return
+    end
+
     -- RU: Устанавливаем флаг подтверждения подключения.
     -- EN: Set the connection acceptance flag.
     GCClientState.SetConnectionAccepted(true)
 
     -- RU: Запрашиваем спавн у сервера.
     -- EN: Request a spawn from the server.
-    TriggerServerEvent('gc_core:server:requestSpawn', {})
+    TriggerServerEvent(GCEvents.Server.requestSpawn, {})
 end)
 
 -- RU: Обработчик одобрения спавна.
 -- EN: Spawn approval handler.
-RegisterNetEvent('gc_core:client:spawnApproved', function(payload)
+RegisterNetEvent(GCEvents.Client.spawnApproved, function(payload)
+    local valid, errorCode = GCValidation.SpawnApproved(payload)
+
+    if not valid then
+        GCClientDiagnostics.Report(errorCode)
+        return
+    end
+
     -- RU: Проверяем, что спавн ещё не выполняется.
     -- EN: Verify that a spawn is not already in progress.
     if GCClientState.IsSpawning() then
@@ -34,7 +48,13 @@ end)
 -- RU: Клиент не должен оставаться в состоянии spawned после отклонения.
 -- EN: Spawn rejection handler.
 -- EN: The client must not remain in the spawned state after a rejection.
-RegisterNetEvent('gc_core:client:spawnRejected', function(payload)
+RegisterNetEvent(GCEvents.Client.spawnRejected, function(payload)
+    local valid = GCValidation.SpawnRejected(payload)
+
+    if not valid then
+        return
+    end
+
     -- RU: Записываем ошибку в лог.
     -- EN: Log the error.
     GCLogger.Warn('GC-CLIENT-SPAWN-002', 'Spawn rejected', {
@@ -57,7 +77,13 @@ end)
 -- EN: Spawn confirmation handler.
 -- EN: ONLY after this event does the client set spawned=true.
 -- EN: The server remains the single source of truth.
-RegisterNetEvent('gc_core:client:spawnConfirmed', function(payload)
+RegisterNetEvent(GCEvents.Client.spawnConfirmed, function(payload)
+    local valid = GCValidation.SpawnConfirmed(payload)
+
+    if not valid then
+        return
+    end
+
     -- RU: Проверяем, что клиент действительно ожидал подтверждения.
     -- EN: Verify that the client was actually waiting for confirmation.
     if not GCClientState.IsSpawnConfirming() then
@@ -88,7 +114,7 @@ end)
 -- EN: Force resync handler after a gc_core restart.
 -- EN: The client does NOT automatically re-spawn the player. It reports its
 -- EN: readiness (resyncReady) to the server, and the server decides what to do.
-RegisterNetEvent('gc_core:client:forceResync', function()
+RegisterNetEvent(GCEvents.Client.forceResync, function()
     -- RU: Сбрасываем клиентское состояние.
     -- EN: Reset the client state.
     GCClientState.Reset()
@@ -100,8 +126,8 @@ RegisterNetEvent('gc_core:client:forceResync', function()
 
     -- RU: Отправляем серверу ответ о готовности к resync.
     -- EN: Send the resync-ready response to the server.
-    TriggerServerEvent('gc_core:server:resyncReady', {
-        protocolVersion = GCConfig.General.protocolVersion,
+    TriggerServerEvent(GCEvents.Server.resyncReady, {
+        protocolVersion = GCVersion.GetProtocolVersion(),
         clientVersion = GCVersion.GetString(),
         isPedAlive = isPedAlive
     })
@@ -109,26 +135,16 @@ end)
 
 -- RU: Обработчик уведомления.
 -- EN: Notification handler.
-RegisterNetEvent('gc_core:client:notify', function(payload)
-    -- RU: Проверяем payload.
-    -- EN: Validate the payload.
-    if type(payload) ~= 'table' then
-        return
-    end
+RegisterNetEvent(GCEvents.Client.notify, function(payload)
+    local valid = GCValidation.Notification(payload)
 
-    -- RU: Проверяем сообщение.
-    -- EN: Validate the message.
-    if type(payload.message) ~= 'string' or #payload.message == 0 then
+    if not valid then
         return
     end
 
     -- RU: Определяем тип уведомления.
     -- EN: Determine the notification type.
-    local notificationType = 'info'
-
-    if type(payload.type) == 'string' and #payload.type > 0 then
-        notificationType = payload.type
-    end
+    local notificationType = payload.type
 
     -- RU: Выводим уведомление с типом.
     -- EN: Show the notification with its type.

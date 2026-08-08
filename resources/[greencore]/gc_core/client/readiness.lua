@@ -93,9 +93,9 @@ function GCClientReadiness.ReportReady()
 
     -- RU: Отправляем payload готовности.
     -- EN: Send the readiness payload.
-    TriggerServerEvent('gc_core:server:clientReady', {
+    TriggerServerEvent(GCEvents.Server.clientReady, {
         clientVersion = GCVersion.GetString(),
-        protocolVersion = GCConfig.General.protocolVersion,
+        protocolVersion = GCVersion.GetProtocolVersion(),
         locale = GCConfig.General.locale
     })
 

@@ -40,29 +40,18 @@ GCLogger = GCLogger or {}
 -- EN: Validation service.
 GCValidation = GCValidation or {}
 
+-- RU: Единый сервис определения runtime-контекста.
+-- EN: Single runtime-context service.
+GCRuntime = GCRuntime or {}
+
+-- RU: Реестр сетевого протокола и генератор корреляционных ID.
+-- EN: Network protocol registry and correlation ID generator.
+GCEvents = GCEvents or {}
+GCIds = GCIds or {}
+
 -- RU: Сервис диагностики.
 -- EN: Diagnostics service.
 GCDiagnostics = GCDiagnostics or {}
 
--- RU: Серверные сервисы (доступны только на сервере).
--- EN: Server services (available only on the server).
-if IsDuplicityVersion then
-    GCConnection = GCConnection or {}
-    GCIdentifiers = GCIdentifiers or {}
-    GCSessions = GCSessions or {}
-    GCStates = GCStates or {}
-    GCSpawn = GCSpawn or {}
-    GCRateLimit = GCRateLimit or {}
-    GCSecurity = GCSecurity or {}
-    GCPedProvider = GCPedProvider or {}
-    GCSpawnLocationProvider = GCSpawnLocationProvider or {}
-end
-
--- RU: Клиентские сервисы (доступны только на клиенте).
--- EN: Client services (available only on the client).
-if not IsDuplicityVersion then
-    GCClientState = GCClientState or {}
-    GCClientReadiness = GCClientReadiness or {}
-    GCClientSpawn = GCClientSpawn or {}
-    GCClientDiagnostics = GCClientDiagnostics or {}
-end
+-- Side-specific services are initialized by server/bootstrap.lua and
+-- client/bootstrap.lua after GCRuntime has asserted the execution context.

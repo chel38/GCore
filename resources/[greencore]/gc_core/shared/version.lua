@@ -1,56 +1,50 @@
--- RU: Версия GreenCore.
--- EN: GreenCore version.
+-- RU: Единый источник версий ресурса, публичного API и сетевого протокола.
+-- EN: Single source of truth for resource, public API, and protocol versions.
 
--- RU: Таблица версии ядра.
--- EN: Core version table.
 GCVersion = {
-    -- RU: Мажорная версия.
-    -- EN: Major version.
-    major = 0,
-
-    -- RU: Минорная версия.
-    -- EN: Minor version.
-    minor = 1,
-
-    -- RU: Патч-версия.
-    -- EN: Patch version.
-    patch = 0,
-
-    -- RU: Метка стадии разработки.
-    -- EN: Development stage label.
-    label = 'development',
-
-    -- RU: Версия публичного API.
-    -- EN: Public API version.
+    resource = {
+        major = 0,
+        minor = 1,
+        patch = 2,
+        prerelease = 'alpha'
+    },
     api = 1,
-
-    -- RU: Версия сетевого протокола.
-    -- EN: Network protocol version.
     protocol = 1
 }
 
---- RU:
---- Возвращает строковое представление версии ядра.
----
---- EN:
---- Returns the string representation of the core version.
----
---- @return string version Version string like "0.1.0"
 function GCVersion.GetString()
-    return ('%d.%d.%d'):format(
-        GCVersion.major,
-        GCVersion.minor,
-        GCVersion.patch
-    )
+    local version = GCVersion.resource
+    local base = ('%d.%d.%d'):format(version.major, version.minor, version.patch)
+
+    if version.prerelease and version.prerelease ~= '' then
+        return ('%s-%s'):format(base, version.prerelease)
+    end
+
+    return base
 end
 
---- RU:
---- Возвращает полную строку версии с меткой стадии.
----
---- EN:
---- Returns the full version string with the stage label.
----
---- @return string fullVersion Full version string
 function GCVersion.GetFullString()
-    return ('%s-%s'):format(GCVersion.GetString(), GCVersion.label)
+    return GCVersion.GetString()
+end
+
+function GCVersion.GetApiVersion()
+    return GCVersion.api
+end
+
+function GCVersion.GetProtocolVersion()
+    return GCVersion.protocol
+end
+
+function GCVersion.GetPublicDto()
+    return {
+        version = GCVersion.GetString(),
+        resource = {
+            major = GCVersion.resource.major,
+            minor = GCVersion.resource.minor,
+            patch = GCVersion.resource.patch,
+            prerelease = GCVersion.resource.prerelease
+        },
+        apiVersion = GCVersion.GetApiVersion(),
+        protocolVersion = GCVersion.GetProtocolVersion()
+    }
 end

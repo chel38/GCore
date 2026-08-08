@@ -476,12 +476,12 @@ function GCConnection.HandleClientReady(playerSource, payload)
         GCLogger.Warn('GC-PROTOCOL-MISMATCH-001', 'Client protocol version is incompatible', {
             source = playerSource,
             clientProtocol = payload.protocolVersion,
-            serverProtocol = GCConfig.General.protocolVersion
+            serverProtocol = GCVersion.GetProtocolVersion()
         })
 
         -- RU: Не продолжаем spawn при несовместимом протоколе.
         -- EN: Do not continue the spawn with an incompatible protocol.
-        TriggerClientEvent('gc_core:client:spawnRejected', playerSource, {
+        TriggerClientEvent(GCEvents.Client.spawnRejected, playerSource, {
             errorCode = 'GC-PROTOCOL-MISMATCH-001',
             retryable = false
         })
@@ -507,9 +507,9 @@ function GCConnection.HandleClientReady(playerSource, payload)
 
     -- RU: Отправляем клиенту подтверждение подключения.
     -- EN: Send the connection acceptance to the client.
-    TriggerClientEvent('gc_core:client:connectionAccepted', playerSource, {
-        apiVersion = GCConfig.General.apiVersion,
-        protocolVersion = GCConfig.General.protocolVersion
+    TriggerClientEvent(GCEvents.Client.connectionAccepted, playerSource, {
+        apiVersion = GCVersion.GetApiVersion(),
+        protocolVersion = GCVersion.GetProtocolVersion()
     })
 end
 
@@ -549,10 +549,12 @@ function GCConnection.HandleResyncReady(playerSource, payload)
     session.metadata.clientVersion = payload.clientVersion
     session.metadata.protocolVersion = payload.protocolVersion
 
-    -- RU: Если ped клиента жив, считаем игрока уже появившимся в мире.
-    -- EN: If the client ped is alive, consider the player already spawned in the world.
-    if payload.isPedAlive then
-        local success, errorCode = GCStates.Set(playerSource, 'spawned', 'resync_ped_alive')
+    -- Client isPedAlive is retained as diagnostic metadata only. OneSync state is authoritative.
+    session.metadata.clientPedAliveHint = payload.isPedAlive == true
+    local authoritativePedAlive = GCPlayers.HasAuthoritativeLivePed(playerSource)
+
+    if authoritativePedAlive then
+        local success, errorCode = GCStates.Set(playerSource, 'spawned', 'resync_server_ped_alive')
 
         if not success then
             GCLogger.Warn('GC-RESYNC-002', 'Failed to transition recovered session to spawned', {
@@ -564,7 +566,7 @@ function GCConnection.HandleResyncReady(playerSource, payload)
 
         -- RU: Сообщаем клиенту, что он уже заспавнен, без повторной телепортации.
         -- EN: Notify the client that it is already spawned, without re-teleporting.
-        TriggerClientEvent('gc_core:client:spawnConfirmed', playerSource, {
+        TriggerClientEvent(GCEvents.Client.spawnConfirmed, playerSource, {
             decisionId = nil,
             state = 'spawned'
         })
@@ -605,8 +607,9 @@ function GCConnection.RequestSpawnForPlayer(playerSource)
     local decision, spawnError = GCSpawn.Request(playerSource)
 
     if not decision then
-        TriggerClientEvent('gc_core:client:spawnRejected', playerSource, {
-            errorCode = spawnError
+        TriggerClientEvent(GCEvents.Client.spawnRejected, playerSource, {
+            errorCode = spawnError,
+            retryable = false
         })
     end
 end

@@ -6,6 +6,31 @@ All notable changes to this project are documented in this file.
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.2-alpha] - 2026-08-08
+
+### Исправлено / Fixed
+
+- Централизовано определение server/client runtime с фактическим вызовом native.
+- Унифицированы `clientReady` и `resyncReady`; protocol mismatch теперь блокирует lifecycle.
+- Recovery больше не доверяет клиентскому `isPedAlive`.
+- `confirmSpawn` проверяет OneSync ped, ownership, model, health и позицию на сервере.
+- Retry инвалидирует старое решение и выбирает новую модель с bounded fallback.
+- Violation counter получил временное окно и decay.
+- Payload schemas отклоняют лишние поля, NaN и Infinity.
+
+### Добавлено / Added
+
+- Единые resource/API/protocol versions и release `0.1.2-alpha`.
+- Реестр сетевых событий, отдельный генератор correlation IDs и тестируемый `GCAPI`.
+- `GetVersionString` и `GetProtocolVersion`; `GetVersion` теперь возвращает immutable DTO.
+- Категории runtime/security/API тестов, standalone Lua harness и GitHub Actions CI.
+- RU/EN migration, runtime, txAdmin и security documentation.
+
+### Изменено / Changed
+
+- Тесты больше не исполняются production manifest и загружаются только по opt-in.
+- Maintenance loops останавливаются через generation token при stop/restart.
+
 ## [0.1.1] - 2026-08-07
 
 ### Добавлено / Added

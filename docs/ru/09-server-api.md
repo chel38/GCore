@@ -1,74 +1,50 @@
-# Серверный API / Server API
+# Серверный API v1
 
-## Уровень 1. Простыми словами
+Exports — тонкие адаптеры над тестируемым `GCAPI`. Они валидируют source и не
+возвращают внутренние таблицы.
 
-API — это набор функций, которые другие Lua-модули могут вызывать.
-GreenCore предоставляет API v1.
+| Export | Возвращает | Контракт |
+| --- | --- | --- |
+| `GetVersion` | table | новый независимый version DTO |
+| `GetVersionString` | string | `0.1.2-alpha` |
+| `GetApiVersion` | number | версия публичного API |
+| `GetProtocolVersion` | number | версия сетевого протокола |
+| `IsPlayerConnected` | boolean | существует активная сессия |
+| `IsPlayerReady` | boolean | lifecycle достиг ready/resync/spawn |
+| `IsPlayerSpawned` | boolean | серверное состояние `spawned` |
+| `GetPlayerState` | string или nil | текущее состояние |
+| `GetPlayerSession` | table или nil | безопасный DTO сессии |
+| `GetPlayerIdentifier` | string или nil | server-only identifier указанного типа |
+| `CanUseGameplayFeatures` | boolean | true только для `spawned` |
+| `RequestPlayerSpawn` | table/nil, error/nil | серверный spawn request |
+| `NotifyPlayer` | boolean, error/nil | уведомление одному игроку |
+| `NotifyAll` | boolean, error/nil | уведомление всем |
 
-## Уровень 2. Техническое объяснение
-
-API реализован через серверные exports.
-Каждый export проверяет аргументы и возвращает понятные ошибки.
-
-## Таблица API
-
-| Export                   | Сторона | Возвращает     | Назначение                |
-| ------------------------ | ------- | -------------- | ------------------------- |
-| `GetApiVersion`          | Server  | number         | Версия API                |
-| `GetVersion`             | Server  | table          | Версия `gc_core`          |
-| `IsPlayerConnected`      | Server  | boolean        | Проверяет сессию          |
-| `IsPlayerReady`          | Server  | boolean        | Проверяет готовность      |
-| `IsPlayerSpawned`        | Server  | boolean        | Проверяет спавн           |
-| `GetPlayerState`         | Server  | string или nil | Возвращает состояние      |
-| `GetPlayerSession`       | Server  | table или nil  | Возвращает копию сессии   |
-| `GetPlayerIdentifier`    | Server  | string или nil | Возвращает идентификатор  |
-| `CanUseGameplayFeatures` | Server  | boolean        | Разрешает игровые функции |
-| `RequestPlayerSpawn`     | Server  | table или nil  | Запрашивает спавн         |
-| `NotifyPlayer`           | Server  | boolean        | Отправляет уведомление    |
-| `NotifyAll`              | Server  | boolean        | Отправляет уведомление всем |
-
-## Уровень 3. Пример Lua-кода
+Version DTO:
 
 ```lua
--- RU: Проверяем версию API.
--- EN: Check the API version.
-local apiVersion = exports.gc_core:GetApiVersion()
-
-if apiVersion ~= 1 then
-    print('Unsupported API version')
-    return
-end
-
--- RU: Проверяем, готов ли игрок.
--- EN: Check whether the player is ready.
-local isReady = exports.gc_core:IsPlayerReady(playerSource)
-
--- RU: Получаем состояние игрока.
--- EN: Get the player state.
-local state = exports.gc_core:GetPlayerState(playerSource)
-
--- RU: Получаем безопасную копию сессии.
--- EN: Get a safe copy of the session.
-local session = exports.gc_core:GetPlayerSession(playerSource)
-
--- RU: Отправляем уведомление игроку.
--- EN: Send a notification to a player.
-local sent = exports.gc_core:NotifyPlayer(playerSource, 'Добро пожаловать!', 'success')
-
--- RU: Отправляем уведомление всем игрокам.
--- EN: Send a notification to all players.
-local sentAll = exports.gc_core:NotifyAll('Сервер перезапускается', 'warning')
+local version = exports.gc_core:GetVersion()
+-- {
+--   version = '0.1.2-alpha',
+--   resource = { major = 0, minor = 1, patch = 2, prerelease = 'alpha' },
+--   apiVersion = 1,
+--   protocolVersion = 1
+-- }
 ```
 
-## Требования к exports
+Изменение `version.resource.patch` не меняет внутреннюю версию. Аналогично,
+`GetPlayerSession` не раскрывает `sessionId`, identifiers, spawn decision,
+rate-limit или security state. `GetPlayerIdentifier` предназначен только для
+доверенных серверных ресурсов и не должен пересылаться клиенту без необходимости.
 
-- Стабильные имена.
-- Проверка аргументов.
-- Не возвращают внутренние таблицы.
-- Возвращают понятные ошибки.
-- Документированы.
-- Работают только на соответствующей стороне.
+```lua
+if exports.gc_core:GetApiVersion() ~= 1 then
+    error('Unsupported gc_core API')
+end
 
-## Следующий шаг
+if exports.gc_core:CanUseGameplayFeatures(source) then
+    exports.gc_core:NotifyPlayer(source, 'Добро пожаловать!', 'success')
+end
+```
 
-Перейдите к [Клиентскому API](10-client-api.md).
+Перейдите к [клиентскому API](10-client-api.md).

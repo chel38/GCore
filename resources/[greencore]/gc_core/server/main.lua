@@ -40,6 +40,10 @@ AddEventHandler('onResourceStart', function(resourceName)
         return
     end
 
+    GCServerRuntime.generation = (GCServerRuntime.generation or 0) + 1
+    GCServerRuntime.running = true
+    local generation = GCServerRuntime.generation
+
     -- RU: Инициализируем генератор случайных чисел.
     -- EN: Initialize the random number generator.
     math.randomseed(os.time())
@@ -73,7 +77,7 @@ AddEventHandler('onResourceStart', function(resourceName)
     -- RU: Запускаем обслуживание временных подключений и spawn decision.
     -- EN: Start maintenance for pending connections and spawn decisions.
     CreateThread(function()
-        while true do
+        while GCServerRuntime.running and GCServerRuntime.generation == generation do
             for temporarySource, pending in pairs(GCSessions.GetAllPending()) do
                 if GCSessions.IsPendingExpired(pending) then
                     GCLogger.Debug('GC-CONNECTION-PENDING-002', 'Pending connection expired', {
@@ -109,6 +113,12 @@ AddEventHandler('onResourceStop', function(resourceName)
     -- RU: Блокируем новые подключения.
     -- EN: Block new connections.
     GCSecurity.BlockConnections('resource_stopping')
+    GCServerRuntime.running = false
+    GCServerRuntime.generation = (GCServerRuntime.generation or 0) + 1
+
+    -- Invalidate every outstanding one-time decision before session cleanup.
+    GCSpawn.RemoveAllDecisions()
+    GCRateLimit.ClearAll()
 
     -- RU: Очищаем pending connection и активные сессии.
     -- EN: Clear pending connections and active sessions.

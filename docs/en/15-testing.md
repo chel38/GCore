@@ -1,122 +1,41 @@
-# Testing / Тестирование
+# Testing
 
-## Level 1. In simple words
+Tests are written in Lua and use logical `unit`, `integration`, `security`, and
+`runtime` categories. During a normal `ensure gc_core`, test files are packaged as
+resource files but are not executed.
 
-Tests verify that GreenCore works correctly.
+## FXServer
 
-## Level 2. Technical explanation
+To validate real CfxLua/native boundaries, temporarily enable:
 
-All tests are written in Lua.
-They do not require external frameworks.
-
-## Test runner
-
-```lua
-GCTest = {}
-
-function GCTest.ExpectEqual(actual, expected, testName)
-end
-
-function GCTest.ExpectTrue(value, testName)
-end
-
-function GCTest.ExpectFalse(value, testName)
-end
-
-function GCTest.Run()
-end
+```cfg
+set gc_runTests 1
 ```
 
-## Test files
+After `refresh` and `restart gc_core`, expect `ALL TESTS PASSED`, then restore
+`gc_runTests 0`. Temporarily setting `GCConfig.Tests.enabled = true` is an
+alternative for local development.
 
-| File | What it checks |
-| ---- | -------------- |
-| `test_runner.lua` | Built-in test runner |
-| `validation_test.lua` | Payload validation |
-| `states_test.lua` | State transitions |
-| `sessions_test.lua` | Sessions |
-| `connection_test.lua` | Identifiers |
-| `spawn_test.lua` | Spawn |
-| `protocol_test.lua` | Client/server protocol compatibility |
-| `ped_provider_test.lua` | Ped selection provider |
-| `logger_test.lua` | Sensitive-data masking in logs |
-| `rate_limit_test.lua` | Rate limit |
-| `notifications_test.lua` | Notifications |
-| `run.lua` | Entry point for running tests |
+## Standalone Lua 5.4
 
-## What is checked
+CI runs:
 
-- Payload validation.
-- Session ID generation.
-- Session creation.
-- Session cloning.
-- Session removal.
-- Allowed transitions.
-- Forbidden transitions.
-- Identifier masking.
-- Rate limit.
-- Spawn decision creation.
-- Decision ID validation.
-- Decision expiry.
-- Duplicate confirmation.
-- String source normalization used by FiveM events.
-- Protocol compatibility.
-- Ped provider validation and selection.
-- Sensitive-data masking in logs.
-
-## Running tests
-
-Tests are disabled by default. Enable them explicitly in `config/general.lua`:
-
-```lua
-GCConfig.Tests.enabled = true
+```text
+lua tools/test_harness.lua .
+pwsh tools/validate-repository.ps1
 ```
 
-Alternatively, add `set gc_runTests 1` to `server.cfg`. In either case,
-`tests/run.lua` calls `GCTest.Run()` when the resource starts. Keep both settings
-disabled in production.
+The harness emulates only the FiveM boundaries needed by unit/integration tests.
+A local FXServer smoke test validates the real OneSync boundary.
 
-Test files are loaded in `fxmanifest.lua` in the `server_scripts` block
-after the main server logic.
+Coverage includes runtime detection, unified handshakes, exact payload schemas,
+finite numbers, lifecycle transitions, recovery DTOs, one-time spawn decisions,
+replay/ownership/TTL, server entity snapshots, new-decision retry, action rate
+limits, violation decay, immutable API DTOs, masking, notifications, locale, and
+the ped provider.
 
-## Manual test scenarios
+The workflow also compiles every Lua file (translating only CfxLua backtick hashes
+in temporary copies), checks version consistency and Markdown links, and rejects
+raw runtime detection, event literals, or direct state mutation.
 
-### Successful connection
-
-**Expected result**: the player passes validation, gets a Lua session, and spawns at the configured point.
-
-### Missing license
-
-**Expected result**: the connection is rejected with a clear localized message.
-
-### Duplicate connection
-
-**Expected result**: the second connection with the same license is handled according to the configuration.
-
-### Duplicate `clientReady`
-
-**Expected result**: no new session is created and no duplicate spawn runs.
-
-### Fake Decision ID
-
-**Expected result**: the server rejects the confirmation.
-
-### Expired decision
-
-**Expected result**: the server does not accept the confirmation.
-
-### Model load error
-
-**Expected result**: the client finishes waiting by timeout and reports the error code to the server.
-
-### Disconnection during spawn
-
-**Expected result**: the Lua session and the temporary decision are fully removed.
-
-### Resource restart
-
-**Expected result**: players resync without endless spawning.
-
-## Next step
-
-Go to [Development Guide](16-development-guide.md).
+Continue with the [development guide](16-development-guide.md).

@@ -31,7 +31,7 @@ Server picks PED → Spawn → Confirmation → Disconnection
 
 ## Статус разработки / Development status
 
-**0.1.0** — первая рабочая версия / first working version.
+**0.1.2-alpha** — стабилизированный early-alpha runtime / stabilized early-alpha runtime.
 
 ## Возможности версии / Version features
 
@@ -41,6 +41,8 @@ Server picks PED → Spawn → Confirmation → Disconnection
 - Серверная state machine с подтверждением спавна / Server state machine with spawn confirmation
 - **Сервер выбирает случайный PED из белого списка** / **Server picks a random PED from a whitelist**
 - Спавн подтверждается только сервером (SERVER = source of truth) / Spawn is confirmed only by the server
+- Сервер проверяет OneSync ped, ownership, model и позицию / Server verifies OneSync ped, ownership, model, and position
+- Строгий handshake и recovery без доверия `isPedAlive` / Strict handshake and recovery without trusting `isPedAlive`
 - Rate limit сетевых событий / Network event rate limiting
 - Автоматическая маскировка чувствительных данных в логах / Automatic sensitive-data masking in logs
 - Recovery сессий при рестарте gc_core / Session recovery on gc_core restart
@@ -88,7 +90,7 @@ ensure gc_core
 8. Найдите сообщение / Look for the message:
 
 ```text
-[GreenCore] [INFO] gc_core 0.1.0 started successfully (recovered N players)
+[GreenCore] [INFO] gc_core 0.1.2-alpha started successfully (recovered N players)
 ```
 
 ## Конфигурация / Configuration
@@ -124,7 +126,9 @@ resources/[greencore]/gc_core/
 | Export                   | Возвращает     | Назначение                |
 | ------------------------ | -------------- | ------------------------- |
 | `GetApiVersion`          | number         | Версия API                |
+| `GetProtocolVersion`     | number         | Версия протокола          |
 | `GetVersion`             | table          | Версия `gc_core`          |
+| `GetVersionString`       | string         | `0.1.2-alpha`             |
 | `IsPlayerConnected`      | boolean        | Проверяет сессию          |
 | `IsPlayerReady`          | boolean        | Проверяет готовность      |
 | `IsPlayerSpawned`        | boolean        | Проверяет спавн           |
@@ -146,12 +150,14 @@ timestamps, lastPed и locale. Внутренние identifiers, spawn decision 
 - [Documentation EN](docs/en/00-introduction.md)
 - [Random PED spawn RU](docs/ru/random-ped-spawn.md)
 - [Random PED spawn EN](docs/en/random-ped-spawn.md)
+- [txAdmin и runtime](docs/ru/18-runtime-txadmin.md) / [txAdmin and runtime](docs/en/18-runtime-txadmin.md)
+- [Миграция 0.1.1 → 0.1.2](docs/ru/migration/0.1.1-to-0.1.2.md) / [Migration](docs/en/migration/0.1.1-to-0.1.2.md)
 
 ## Тестирование / Testing
 
 Все тесты написаны на Lua / All tests are written in Lua.
 
-Тесты **не** запускаются автоматически при обычном `ensure gc_core`.
+Тесты **не загружаются и не запускаются** при обычном `ensure gc_core`.
 Они запускаются только при явном включении:
 
 ```cfg

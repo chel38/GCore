@@ -27,7 +27,7 @@ function GCClientDiagnostics.Report(errorCode)
 
     -- RU: Отправляем ошибку серверу.
     -- EN: Send the error to the server.
-    TriggerServerEvent('gc_core:server:reportClientError', {
+    TriggerServerEvent(GCEvents.Server.reportClientError, {
         errorCode = errorCode
     })
 end

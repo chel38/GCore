@@ -14,8 +14,8 @@
 ## Ожидаемые сообщения
 
 ```text
-[GreenCore] [INFO] gc_core server bootstrap loaded | version=0.1.0
-[GreenCore] [INFO] gc_core 0.1.0 started successfully
+[GreenCore] [INFO] gc_core server bootstrap loaded | version=0.1.2-alpha
+[GreenCore] [INFO] gc_core 0.1.2-alpha started successfully
 ```
 
 ## Что происходит при подключении игрока
@@ -59,13 +59,13 @@ gc_core запускает deferrals
 В консоли сервера выполните:
 
 ```lua
-print(exports.gc_core:GetVersion())
+print(exports.gc_core:GetVersionString())
 ```
 
 Должно вывестись:
 
 ```text
-0.1.0
+0.1.2-alpha
 ```
 
 ## Возможные проблемы

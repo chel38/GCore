@@ -20,17 +20,9 @@ GCConfig.General = {
     -- EN: Enables verbose debug messages.
     debug = false,
 
-    -- RU: Режим разработки. Включает дополнительные проверки.
-    -- EN: Development mode. Enables additional checks.
-    developmentMode = true,
-
-    -- RU: Версия публичного API. Модули проверяют её перед использованием.
-    -- EN: Public API version. Modules check it before use.
-    apiVersion = 1,
-
-    -- RU: Версия сетевого протокола между клиентом и сервером.
-    -- EN: Network protocol version between client and server.
-    protocolVersion = 1
+    -- RU: Режим разработки. В production его следует отключить.
+    -- EN: Development mode. Disable it in production.
+    developmentMode = true
 }
 
 -- RU: Настройки тестов.

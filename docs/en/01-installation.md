@@ -46,7 +46,7 @@ ensure gc_core
 Look for the message:
 
 ```text
-[GreenCore] [INFO] gc_core 0.1.0 started successfully
+[GreenCore] [INFO] gc_core 0.1.2-alpha started successfully
 ```
 
 ## Windows instructions

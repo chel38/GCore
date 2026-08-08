@@ -1,148 +1,17 @@
--- RU: Публичный API GreenCore (серверные exports).
--- EN: GreenCore public API (server exports).
+-- RU: Thin FiveM export adapters over GCAPI.
+-- EN: Thin FiveM export adapters over GCAPI.
 
--- RU: Возвращает версию API.
--- EN: Returns the API version.
-exports('GetApiVersion', function()
-    return GCConfig.General.apiVersion
-end)
-
--- RU: Возвращает версию gc_core.
--- EN: Returns the gc_core version.
-exports('GetVersion', function()
-    return GCVersion.GetString()
-end)
-
--- RU: Проверяет, подключён ли игрок (существует ли сессия).
--- EN: Checks whether a player is connected (session exists).
-exports('IsPlayerConnected', function(playerSource)
-    if type(playerSource) ~= 'number' then
-        return false
-    end
-
-    return GCSessions.Exists(playerSource)
-end)
-
--- RU: Проверяет, готов ли игрок к игровым действиям.
--- EN: Checks whether a player is ready for gameplay actions.
-exports('IsPlayerReady', function(playerSource)
-    if type(playerSource) ~= 'number' then
-        return false
-    end
-
-    return GCStates.Is(playerSource, 'client_ready')
-        or GCStates.Is(playerSource, 'spawn_pending')
-        or GCStates.Is(playerSource, 'spawning')
-        or GCStates.Is(playerSource, 'spawn_confirming')
-        or GCStates.Is(playerSource, 'spawned')
-        or GCStates.Is(playerSource, 'resyncing')
-end)
-
--- RU: Проверяет, появился ли игрок.
--- EN: Checks whether a player has spawned.
-exports('IsPlayerSpawned', function(playerSource)
-    if type(playerSource) ~= 'number' then
-        return false
-    end
-
-    return GCStates.Is(playerSource, 'spawned')
-end)
-
--- RU: Возвращает текущее состояние игрока.
--- EN: Returns the current state of a player.
-exports('GetPlayerState', function(playerSource)
-    if type(playerSource) ~= 'number' then
-        return nil
-    end
-
-    return GCStates.Get(playerSource)
-end)
-
--- RU: Возвращает безопасный публичный DTO сессии игрока.
--- RU: НЕ раскрывает внутренние identifiers, spawn decision, security или
--- RU: rate-limit данные.
--- EN: Returns a safe public DTO of a player session.
--- EN: Does NOT expose internal identifiers, spawn decision, security, or
--- EN: rate-limit data.
-exports('GetPlayerSession', function(playerSource)
-    if type(playerSource) ~= 'number' then
-        return nil
-    end
-
-    return GCSessions.GetPublicDTO(playerSource)
-end)
-
--- RU: Возвращает идентификатор игрока по типу.
--- EN: Returns a player identifier by type.
-exports('GetPlayerIdentifier', function(playerSource, identifierType)
-    if type(playerSource) ~= 'number' then
-        return nil
-    end
-
-    if type(identifierType) ~= 'string' then
-        return nil
-    end
-
-    return GCIdentifiers.GetByType(playerSource, identifierType)
-end)
-
--- RU: Проверяет, может ли игрок использовать игровые функции.
--- EN: Checks whether a player can use gameplay features.
-exports('CanUseGameplayFeatures', function(playerSource)
-    if type(playerSource) ~= 'number' then
-        return false
-    end
-
-    return GCStates.Is(playerSource, 'spawned')
-end)
-
--- RU: Запрашивает спавн игрока.
--- EN: Requests a player spawn.
-exports('RequestPlayerSpawn', function(playerSource)
-    if type(playerSource) ~= 'number' then
-        return nil
-    end
-
-    return GCSpawn.Request(playerSource)
-end)
-
--- RU: Отправляет уведомление игроку.
--- EN: Sends a notification to a player.
-exports('NotifyPlayer', function(playerSource, message, notificationType)
-    if type(playerSource) ~= 'number' then
-        return false
-    end
-
-    if type(message) ~= 'string' then
-        return false
-    end
-
-    local success, errorCode = GCNotifications.SendToPlayer(playerSource, message, notificationType)
-
-    if not success then
-        GCLogger.Warn('GC-NOTIFY-100', 'Failed to send notification', {
-            source = playerSource,
-            errorCode = errorCode
-        })
-    end
-
-    return success
-end)
-
--- RU: Отправляет уведомление всем игрокам.
--- EN: Sends a notification to all players.
-exports('NotifyAll', function(message, notificationType)
-    if type(message) ~= 'string' then
-        return false
-    end
-
-    local success, errorCode = GCNotifications.SendToAll(message, notificationType)
-
-    if not success then
-        GCLogger.Warn('GC-NOTIFY-101', 'Failed to send notification to all', {
-            errorCode = errorCode
-        })
-    end
-
-    return success
-end)
+exports('GetVersion', GCAPI.GetVersion)
+exports('GetVersionString', GCAPI.GetVersionString)
+exports('GetApiVersion', GCAPI.GetApiVersion)
+exports('GetProtocolVersion', GCAPI.GetProtocolVersion)
+exports('IsPlayerConnected', GCAPI.IsPlayerConnected)
+exports('IsPlayerReady', GCAPI.IsPlayerReady)
+exports('IsPlayerSpawned', GCAPI.IsPlayerSpawned)
+exports('GetPlayerState', GCAPI.GetPlayerState)
+exports('GetPlayerSession', GCAPI.GetPlayerSession)
+exports('GetPlayerIdentifier', GCAPI.GetPlayerIdentifier)
+exports('CanUseGameplayFeatures', GCAPI.CanUseGameplayFeatures)
+exports('RequestPlayerSpawn', GCAPI.RequestPlayerSpawn)
+exports('NotifyPlayer', GCAPI.NotifyPlayer)
+exports('NotifyAll', GCAPI.NotifyAll)

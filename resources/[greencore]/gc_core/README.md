@@ -36,7 +36,9 @@ ensure gc_core
 | Export                   | Возвращает     | Назначение                |
 | ------------------------ | -------------- | ------------------------- |
 | `GetApiVersion`          | number         | Версия API                |
+| `GetProtocolVersion`     | number         | Версия протокола          |
 | `GetVersion`             | table          | Версия `gc_core`          |
+| `GetVersionString`       | string         | Строка версии             |
 | `IsPlayerConnected`      | boolean        | Проверяет сессию          |
 | `IsPlayerReady`          | boolean        | Проверяет готовность      |
 | `IsPlayerSpawned`        | boolean        | Проверяет спавн           |

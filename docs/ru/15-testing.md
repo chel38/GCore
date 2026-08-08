@@ -1,122 +1,49 @@
-# Тестирование / Testing
+# Тестирование
 
-## Уровень 1. Простыми словами
+Тесты написаны на Lua и разделены логическими категориями: `unit`, `integration`,
+`security`, `runtime`. При обычном `ensure gc_core` файлы только упакованы как
+resource files и не исполняются.
 
-Тесты проверяют, что GreenCore работает правильно.
+## FXServer
 
-## Уровень 2. Техническое объяснение
+Для проверки реальных CfxLua/native boundaries временно включите:
 
-Все тесты написаны на Lua.
-Они не требуют внешних фреймворков.
-
-## Тестовый раннер
-
-```lua
-GCTest = {}
-
-function GCTest.ExpectEqual(actual, expected, testName)
-end
-
-function GCTest.ExpectTrue(value, testName)
-end
-
-function GCTest.ExpectFalse(value, testName)
-end
-
-function GCTest.Run()
-end
+```cfg
+set gc_runTests 1
 ```
 
-## Файлы тестов
+После `refresh` и `restart gc_core` найдите `ALL TESTS PASSED`, затем обязательно
+верните `gc_runTests 0`. Альтернатива для локальной разработки — временный
+`GCConfig.Tests.enabled = true`.
 
-| Файл | Что проверяет |
-| ---- | ------------- |
-| `test_runner.lua` | Встроенный тестовый раннер |
-| `validation_test.lua` | Валидацию payload |
-| `states_test.lua` | Переходы состояний |
-| `sessions_test.lua` | Сессии |
-| `connection_test.lua` | Идентификаторы |
-| `spawn_test.lua` | Спавн |
-| `protocol_test.lua` | Совместимость протокола клиента и сервера |
-| `ped_provider_test.lua` | Провайдер выбора ped-модели |
-| `logger_test.lua` | Маскирование чувствительных данных в логах |
-| `rate_limit_test.lua` | Rate limit |
-| `notifications_test.lua` | Уведомления |
-| `run.lua` | Точка входа для запуска тестов |
+## Standalone Lua 5.4
+
+CI выполняет:
+
+```text
+lua tools/test_harness.lua .
+pwsh tools/validate-repository.ps1
+```
+
+Harness эмулирует только границы FiveM, нужные unit/integration тестам. Реальную
+работу OneSync подтверждает локальный FXServer smoke test.
 
 ## Что проверяется
 
-- Валидацию payload.
-- Генерацию Session ID.
-- Создание сессии.
-- Копирование сессии.
-- Удаление сессии.
-- Разрешённые переходы.
-- Запрещённые переходы.
-- Маскировку identifier.
-- Rate limit.
-- Создание spawn decision.
-- Проверку Decision ID.
-- Истечение решения.
-- Повторное подтверждение.
-- Нормализацию строкового source из событий FiveM.
-- Совместимость протокола.
-- Валидацию и выбор ped-модели.
-- Маскирование чувствительных данных в логах.
+- runtime detection с фактическим вызовом native;
+- единый clientReady/resyncReady handshake и mismatch protocol;
+- точные payload schemas, неизвестные поля, NaN/Infinity;
+- state machine и lifecycle;
+- pending/session/recovery DTO;
+- одноразовые spawn decisions, replay/ownership/TTL;
+- server snapshot model/owner/position verification;
+- новая модель и новый decision на retry;
+- action rate limits и decay violation window;
+- API DTO immutability и invalid arguments;
+- masking, notifications, locale и ped provider.
 
-## Запуск тестов
+Workflow также компилирует все Lua-файлы (преобразуя только CfxLua backtick hash во
+временной копии), сверяет версии, локальные Markdown-ссылки и запрещённые patterns:
+сырой runtime detection, event literals и прямые state mutations.
 
-По умолчанию тесты отключены. Включите их явно в `config/general.lua`:
-
-```lua
-GCConfig.Tests.enabled = true
-```
-
-Либо добавьте `set gc_runTests 1` в `server.cfg`. В обоих случаях
-`tests/run.lua` вызывает `GCTest.Run()` при запуске ресурса. В продакшене
-оставляйте обе настройки выключенными.
-
-Тестовые файлы подключаются в `fxmanifest.lua` в блоке `server_scripts`
-после основной серверной логики.
-
-## Сценарии ручного тестирования
-
-### Успешное подключение
-
-**Ожидаемый результат**: игрок проходит проверку, получает Lua-сессию и появляется в заданной точке.
-
-### Отсутствует license
-
-**Ожидаемый результат**: подключение отклоняется с понятным локализованным сообщением.
-
-### Двойное подключение
-
-**Ожидаемый результат**: второе подключение с тем же license обрабатывается согласно конфигурации.
-
-### Повторный `clientReady`
-
-**Ожидаемый результат**: не создаётся новая сессия и не запускается повторный спавн.
-
-### Поддельный Decision ID
-
-**Ожидаемый результат**: сервер отклоняет подтверждение.
-
-### Истёкшее решение
-
-**Ожидаемый результат**: сервер не принимает подтверждение.
-
-### Ошибка загрузки модели
-
-**Ожидаемый результат**: клиент завершает ожидание по тайм-ауту и сообщает серверу код ошибки.
-
-### Отключение во время спавна
-
-**Ожидаемый результат**: Lua-сессия и временное решение полностью удаляются.
-
-### Перезапуск ресурса
-
-**Ожидаемый результат**: игроки проходят повторную синхронизацию без бесконечного спавна.
-
-## Следующий шаг
-
-Перейдите к [Руководству разработчика](16-development-guide.md).
+Перейдите к [руководству разработчика](16-development-guide.md).

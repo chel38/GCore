@@ -4,7 +4,7 @@
 -- RU: Тест совпадения версии протокола.
 -- EN: Test of protocol version match.
 GCTest.Register('protocol.same_version', function()
-    local serverProtocol = GCConfig.General.protocolVersion
+    local serverProtocol = GCVersion.GetProtocolVersion()
 
     local matches, errorCode = GCValidation.ProtocolMatches(serverProtocol)
 
@@ -15,7 +15,7 @@ end)
 -- RU: Тест несовпадающей версии протокола.
 -- EN: Test of a mismatched protocol version.
 GCTest.Register('protocol.wrong_version', function()
-    local serverProtocol = GCConfig.General.protocolVersion
+    local serverProtocol = GCVersion.GetProtocolVersion()
 
     -- RU: Берём заведомо другую версию.
     -- EN: Take a guaranteed different version.
@@ -58,8 +58,8 @@ end)
 -- EN: Test of resync-ready payload validation.
 GCTest.Register('protocol.resync_ready.valid', function()
     local payload = {
-        protocolVersion = GCConfig.General.protocolVersion,
-        clientVersion = '0.1.0',
+        protocolVersion = GCVersion.GetProtocolVersion(),
+        clientVersion = GCVersion.GetString(),
         isPedAlive = true
     }
 
@@ -73,7 +73,7 @@ end)
 -- EN: Test of an invalid resync-ready payload.
 GCTest.Register('protocol.resync_ready.invalid', function()
     local payload = {
-        protocolVersion = GCConfig.General.protocolVersion,
+        protocolVersion = GCVersion.GetProtocolVersion(),
         clientVersion = 123
     }
 

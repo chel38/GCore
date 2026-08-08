@@ -107,3 +107,23 @@ GCTest.Register('validation.confirm_spawn.invalid_decision', function()
     GCTest.ExpectFalse(isValid, 'non-string decisionId is rejected')
     GCTest.ExpectEqual(errorCode, 'GC-PAYLOAD-DECISION-001', 'correct error code for decision')
 end)
+
+GCTest.Register('validation.rejects_unknown_fields', function()
+    local valid = GCValidation.ClientReady({
+        clientVersion = GCVersion.GetString(),
+        protocolVersion = GCVersion.GetProtocolVersion(),
+        injected = true
+    })
+
+    GCTest.ExpectFalse(valid, 'unknown handshake fields are rejected')
+end, 'security')
+
+GCTest.Register('validation.rejects_non_finite_coordinates', function()
+    local valid = GCValidation.SpawnApproved({
+        decisionId = 'gc:spawn:test',
+        position = { x = 0 / 0, y = 0.0, z = 0.0, heading = 0.0 },
+        ped = { name = 'mp_m_freemode_01' }
+    })
+
+    GCTest.ExpectFalse(valid, 'NaN coordinates are rejected')
+end, 'security')

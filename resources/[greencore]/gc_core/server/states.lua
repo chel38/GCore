@@ -44,6 +44,7 @@ local allowedTransitions = {
     },
     spawn_confirming = {
         'spawned',
+        'spawn_pending',
         'error',
         'disconnecting'
     },

@@ -1,101 +1,36 @@
-# События / Events
+# Сетевые события протокола v1
 
-## Уровень 1. Простыми словами
+Имена определены только в `shared/events.lua`. Не создавайте строковые копии в
+runtime-коде. Неизвестные поля payload отклоняются.
 
-События — это сообщения между клиентом и сервером.
-GreenCore использует единый namespace `gc_core:`.
+## Клиент → сервер
 
-## Уровень 2. Техническое объяснение
+| Событие | Payload | Состояние | Лимит |
+| --- | --- | --- | --- |
+| `gc_core:server:clientReady` | `clientVersion`, `protocolVersion`, optional `locale` | `joining` | `clientReady` |
+| `gc_core:server:requestSpawn` | пустая table | `client_ready`/`spawn_pending` | `requestSpawn` |
+| `gc_core:server:confirmSpawn` | только `decisionId` | `spawn_confirming` | `confirmSpawn` |
+| `gc_core:server:reportClientError` | известный `errorCode` | spawn flow | `reportClientError` |
+| `gc_core:server:resyncReady` | handshake + optional `isPedAlive` hint | `resyncing` | `resyncReady` |
 
-Все события имеют уникальные имена с префиксом `gc_core:`.
-Это предотвращает конфликты с другими ресурсами.
+`clientReady` и `resyncReady` используют один валидатор handshake. Protocol должен
+быть конечным целым числом и точно совпадать с `GetProtocolVersion()`. Подсказка
+`isPedAlive` сохраняется только для диагностики: решение recovery принимает сервер
+по OneSync entity.
 
-## События клиент → сервер
+## Сервер → клиент
 
-| Событие | Назначение |
-| ------- | ---------- |
-| `gc_core:server:clientReady` | Готовность клиента |
-| `gc_core:server:requestSpawn` | Запрос спавна |
-| `gc_core:server:confirmSpawn` | Подтверждение спавна |
-| `gc_core:server:reportClientError` | Сообщение об ошибке |
+| Событие | Payload |
+| --- | --- |
+| `gc_core:client:connectionAccepted` | точные `apiVersion`, `protocolVersion` |
+| `gc_core:client:spawnApproved` | `decisionId`, position, ped, expiry, attempt |
+| `gc_core:client:spawnRejected` | известный `errorCode`, boolean `retryable` |
+| `gc_core:client:spawnConfirmed` | `decisionId` или nil при recovery, state=`spawned` |
+| `gc_core:client:forceResync` | без payload |
+| `gc_core:client:notify` | message ≤ 256, тип из allowlist |
 
-## События сервер → клиент
+Spawn decision ID и session/correlation IDs не являются секретами и не дают
+авторизацию. Сервер всегда дополнительно проверяет source, session ownership,
+TTL, one-time consumption и текущее состояние.
 
-| Событие | Назначение |
-| ------- | ---------- |
-| `gc_core:client:connectionAccepted` | Подтверждение подключения |
-| `gc_core:client:spawnApproved` | Одобрение спавна |
-| `gc_core:client:spawnRejected` | Отклонение спавна |
-| `gc_core:client:forceResync` | Принудительная ресинхронизация |
-| `gc_core:client:notify` | Уведомление |
-
-## Документация события: `gc_core:server:clientReady`
-
-- **Название**: `gc_core:server:clientReady`
-- **Направление**: клиент → сервер
-- **Назначение**: сообщает серверу о готовности клиента
-- **Payload**:
-  ```lua
-  {
-      clientVersion = '0.1.0',
-      protocolVersion = 1,
-      locale = 'ru'
-  }
-  ```
-- **Обязательные поля**: `clientVersion`, `protocolVersion`
-- **Типы**: `string`, `number`
-- **Ограничения**: длина `clientVersion` ≤ 32
-- **Допустимые состояния**: `joining`
-- **Rate limit**: `clientReady`
-- **Возможные ошибки**: `GC-PAYLOAD-*`
-
-## Документация события: `gc_core:server:confirmSpawn`
-
-- **Название**: `gc_core:server:confirmSpawn`
-- **Направление**: клиент → сервер
-- **Назначение**: подтверждает завершение спавна
-- **Payload**:
-  ```lua
-  {
-      decisionId = 'gc:spawn:generated-id'
-  }
-  ```
-- **Обязательные поля**: `decisionId`
-- **Типы**: `string`
-- **Ограничения**: длина `decisionId` ≤ 128
-- **Допустимые состояния**: `spawning`
-- **Rate limit**: `confirmSpawn`
-- **Возможные ошибки**: `GC-SPAWN-*`
-
-## Документация события: `gc_core:client:notify`
-
-- **Название**: `gc_core:client:notify`
-- **Направление**: сервер → клиент
-- **Назначение**: показывает игроку уведомление
-- **Payload**:
-  ```lua
-  {
-      message = 'Добро пожаловать!',
-      type = 'success'
-  }
-  ```
-- **Обязательные поля**: `message`
-- **Типы**: `string`, `string`
-- **Ограничения**: длина `message` ≤ 256
-- **Допустимые типы**: `info`, `success`, `warning`, `error`
-- **Отправка**: через exports `NotifyPlayer` и `NotifyAll`
-
-## Запрещённые названия
-
-```text
-ready
-spawn
-start
-load
-check
-playerReady
-```
-
-## Следующий шаг
-
-Перейдите к [Безопасности](12-security.md).
+Перейдите к [безопасности](12-security.md).

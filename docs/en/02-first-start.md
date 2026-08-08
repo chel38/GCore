@@ -14,8 +14,8 @@ When `gc_core` starts, the following steps run:
 ## Expected messages
 
 ```text
-[GreenCore] [INFO] gc_core server bootstrap loaded | version=0.1.0
-[GreenCore] [INFO] gc_core 0.1.0 started successfully
+[GreenCore] [INFO] gc_core server bootstrap loaded | version=0.1.2-alpha
+[GreenCore] [INFO] gc_core 0.1.2-alpha started successfully
 ```
 
 ## What happens when a player connects
@@ -59,13 +59,13 @@ The player should spawn at the point from `config/spawn.lua`.
 In the server console run:
 
 ```lua
-print(exports.gc_core:GetVersion())
+print(exports.gc_core:GetVersionString())
 ```
 
 It should print:
 
 ```text
-0.1.0
+0.1.2-alpha
 ```
 
 ## Possible issues

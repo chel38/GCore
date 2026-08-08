@@ -1,84 +1,48 @@
-# Конфигурация / Configuration
+# Конфигурация
 
-## Уровень 1. Простыми словами
-
-Конфигурация — это настройки GreenCore.
-Они хранятся в Lua-файлах в папке `config/`.
-
-## Уровень 2. Техническое объяснение
-
-Вся конфигурация хранится в глобальной таблице `GCConfig`.
-Каждый файл отвечает за свою область.
-
-## Файлы конфигурации
+Runtime-конфигурация находится в `resources/[greencore]/gc_core/config/` и
+загружается как Lua. Версии ресурса, API и протокола здесь не дублируются:
+единственный источник — `shared/version.lua`.
 
 | Файл | Назначение |
-| ---- | ---------- |
-| `general.lua` | Общие настройки |
-| `connection.lua` | Настройки подключения |
-| `spawn.lua` | Настройки спавна |
-| `security.lua` | Настройки безопасности |
-| `logging.lua` | Настройки логирования |
-| `diagnostics.lua` | Настройки диагностики |
+| --- | --- |
+| `general.lua` | locale, debug, development mode, opt-in тестов |
+| `connection.lua` | deferral, pending, clientReady и resync timeout |
+| `spawn.lua` | точка, белый список ped, retry и server verification |
+| `security.lua` | лимиты действий и окно нарушений |
+| `logging.lua` | уровень и маскирование чувствительных данных |
+| `diagnostics.lua` | диагностические сообщения |
 
-## Пример: `general.lua`
+Критичные настройки spawn verification:
 
 ```lua
-GCConfig.General = {
-    locale = 'ru',
-    fallbackLocale = 'en',
-
-    debug = false,
-    developmentMode = true,
-
-    apiVersion = 1,
-    protocolVersion = 1
+verification = {
+    enabled = true,
+    timeoutMs = 3000,
+    intervalMs = 100,
+    positionTolerance = 8.0,
+    minimumHealth = 1
 }
 ```
 
-## Пример: `spawn.lua`
+Не отключайте `verification.enabled` на публичном сервере. Подтверждение клиента
+содержит только `decisionId`; сервер сам читает OneSync entity, ownership, model,
+health и координаты.
+
+Retry ограничен одновременно `maxAttempts` и `maxModelAttempts`. Неудачная модель
+добавляется в `attemptedPedModels`, старое решение инвалидируется, а новое получает
+другой ID и по возможности другую модель. Fallback используется только после
+исчерпания подходящих моделей.
+
+Rate-limit задаётся отдельно для `clientReady`, `requestSpawn`, `confirmSpawn`,
+`reportClientError` и `resyncReady`. `violationWindowMs` удаляет старые нарушения;
+`maxViolationsPerWindow` не является пожизненным счётчиком сессии.
+
+Для production оставьте:
 
 ```lua
-GCConfig.Spawn = {
-    default = {
-        x = -1037.65,
-        y = -2737.72,
-        z = 20.17,
-        heading = 329.0,
-        model = `mp_m_freemode_01`
-    },
-
-    decisionLifetimeMs = 30000,
-    modelLoadTimeoutMs = 10000,
-    collisionLoadTimeoutMs = 10000,
-    clientSpawnTimeoutMs = 20000,
-
-    fadeOutDurationMs = 500,
-    fadeInDurationMs = 1000
-}
+GCConfig.General.developmentMode = false
+GCConfig.Tests.enabled = false
 ```
 
-## Правила
-
-- Конфигурация хранится **только** в Lua-файлах.
-- Нельзя использовать JSON, YAML, XML, TOML, INI.
-- Каждый параметр имеет двуязычный комментарий.
-- Координаты не жёстко прописываются в основной логике.
-
-## Изменение точки спавна
-
-Откройте `config/spawn.lua` и измените координаты:
-
-```lua
-default = {
-    x = 0.0,
-    y = 0.0,
-    z = 71.0,
-    heading = 0.0,
-    model = `mp_m_freemode_01`
-}
-```
-
-## Следующий шаг
-
-Перейдите к [Серверному API](09-server-api.md).
+Перейдите к [серверному API](09-server-api.md).

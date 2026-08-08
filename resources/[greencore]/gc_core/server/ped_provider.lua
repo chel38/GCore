@@ -81,7 +81,10 @@ function GCPedProvider.ValidateConfig()
     for _, model in ipairs(models) do
         -- RU: Запись должна быть непустой строкой.
         -- EN: The entry must be a non-empty string.
-        if type(model) ~= 'string' or #model == 0 then
+        if type(model) ~= 'string'
+            or #model == 0
+            or #model > GCConstants.maxPedModelLength
+            or not GCPedProvider.IsModelAllowed(model) then
             GCLogger.Warn('GC-SPAWN-PED-INVALID-001', 'Invalid model entry in whitelist, skipped', {
                 model = tostring(model)
             })
@@ -177,9 +180,10 @@ end
 ---
 --- @param playerSource number FiveM server player source
 --- @param session table Player session
+--- @param excludedModels table|nil Set of models already attempted by this session
 --- @return table|nil pedDefinition Table with name (and hash if available)
 --- @return string|nil errorCode Error code
-function GCPedProvider.Resolve(playerSource, session)
+function GCPedProvider.Resolve(playerSource, session, excludedModels)
     -- RU: Проверяем входные данные.
     -- EN: Validate input data.
     if type(playerSource) ~= 'number' then
@@ -190,37 +194,50 @@ function GCPedProvider.Resolve(playerSource, session)
     -- EN: If random selection is disabled, use the fallback ped.
     local randomPed = GCConfig.Spawn.randomPed
 
+    excludedModels = type(excludedModels) == 'table' and excludedModels or {}
+
     if type(randomPed) ~= 'table' or not randomPed.enabled then
-        return GCPedProvider.ResolveFallback()
+        local fallback = GCPedProvider.ResolveFallback()
+        return excludedModels[fallback.name] and nil or fallback,
+            excludedModels[fallback.name] and 'GC-SPAWN-PED-EXHAUSTED-001' or nil
     end
 
     local models = GCPedProvider.GetModels()
 
     -- RU: Если список пуст, используем fallback ped.
     -- EN: If the list is empty, use the fallback ped.
-    if #models == 0 then
-        return GCPedProvider.ResolveFallback()
+    local candidates = {}
+
+    for _, modelName in ipairs(models) do
+        if not excludedModels[modelName]
+            and (not randomPed.avoidImmediateRepeat or not session or session.lastPed ~= modelName) then
+            candidates[#candidates + 1] = modelName
+        end
+    end
+
+    if #candidates == 0 and session and session.lastPed then
+        for _, modelName in ipairs(models) do
+            if not excludedModels[modelName] then
+                candidates[#candidates + 1] = modelName
+            end
+        end
+    end
+
+    if #candidates == 0 then
+        local fallback = GCPedProvider.ResolveFallback()
+
+        if excludedModels[fallback.name] then
+            return nil, 'GC-SPAWN-PED-EXHAUSTED-001'
+        end
+
+        return fallback
     end
 
     -- RU: Выбираем случайный индекс. Для выбора педа криптографическая
     -- RU: случайность не требуется (см. раздел "Random PED и Random generator").
     -- EN: Pick a random index. Cryptographic randomness is not required for
     -- EN: picking a ped (see "Random PED and Random generator" section).
-    local selectedIndex = math.random(1, #models)
-    local selectedModel = models[selectedIndex]
-
-    -- RU: Защита от немедленного повтора: если выбранная модель совпала
-    -- RU: с последней моделью игрока, берём следующую модель циклически.
-    -- RU: Циклический переход избегает бесконечного цикла while.
-    -- EN: Immediate-repeat protection: if the chosen model matches the player's
-    -- EN: last model, take the next model cyclically.
-    -- EN: The cyclic step avoids an infinite while loop.
-    if randomPed.avoidImmediateRepeat
-        and session and session.lastPed == selectedModel
-        and #models > 1 then
-        selectedIndex = selectedIndex % #models + 1
-        selectedModel = models[selectedIndex]
-    end
+    local selectedModel = candidates[math.random(1, #candidates)]
 
     -- RU: Формируем определение педа. Hash вычисляется сервером, если доступен joaat.
     -- EN: Build the ped definition. The hash is computed server-side if joaat is available.

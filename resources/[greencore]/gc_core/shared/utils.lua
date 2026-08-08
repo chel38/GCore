@@ -17,6 +17,14 @@ function GCUtils.IsNumber(value)
     return type(value) == 'number'
 end
 
+--- Returns true only for a finite Lua number (rejects NaN and infinities).
+function GCUtils.IsFiniteNumber(value)
+    return type(value) == 'number'
+        and value == value
+        and value ~= math.huge
+        and value ~= -math.huge
+end
+
 --- RU:
 --- Проверяет, является ли значение целым числом.
 ---
@@ -26,7 +34,7 @@ end
 --- @param value any Value to check
 --- @return boolean isInteger Whether the value is an integer
 function GCUtils.IsInteger(value)
-    return type(value) == 'number' and math.floor(value) == value
+    return GCUtils.IsFiniteNumber(value) and math.floor(value) == value
 end
 
 --- RU:
@@ -88,7 +96,7 @@ end
 --- @param max number Maximum value
 --- @return boolean inRange Whether the value is in range
 function GCUtils.IsInRange(value, min, max)
-    if type(value) ~= 'number' then
+    if not GCUtils.IsFiniteNumber(value) then
         return false
     end
 
@@ -169,13 +177,7 @@ end
 --- @param prefix string Prefix for the identifier
 --- @return string identifier Generated identifier
 function GCUtils.GenerateId(prefix)
-    local randomPart = ''
-
-    for _ = 1, 16 do
-        randomPart = randomPart .. string.format('%02x', math.random(0, 255))
-    end
-
-    return ('%s:%s'):format(prefix, randomPart)
+    return GCIds.NewCorrelationId(prefix)
 end
 
 --- RU:
@@ -187,25 +189,7 @@ end
 --- @param prefix string Prefix for the identifier
 --- @return string identifier Generated identifier
 function GCUtils.GenerateUuid(prefix)
-    local function randomHex(length)
-        local result = ''
-
-        for _ = 1, length do
-            result = result .. string.format('%x', math.random(0, 15))
-        end
-
-        return result
-    end
-
-    local uuid = ('%s-%s-%s-%s-%s'):format(
-        randomHex(8),
-        randomHex(4),
-        randomHex(4),
-        randomHex(4),
-        randomHex(12)
-    )
-
-    return ('%s:%s'):format(prefix, uuid)
+    return GCIds.NewCorrelationId(prefix)
 end
 
 --- RU:

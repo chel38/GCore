@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lua:
+    name: Lua syntax and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Lua 5.4
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes lua5.4
+          sudo update-alternatives --install /usr/local/bin/lua lua /usr/bin/lua5.4 100
+          sudo update-alternatives --install /usr/local/bin/luac luac /usr/bin/luac5.4 100
+
+      - name: Validate repository contracts
+        shell: pwsh
+        run: ./tools/validate-repository.ps1
+
+      - name: Run unit, integration, security, and runtime tests
+        run: lua tools/test_harness.lua .

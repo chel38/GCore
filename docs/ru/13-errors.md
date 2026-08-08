@@ -1,70 +1,22 @@
-# Ошибки / Errors
+# Ошибки
 
-## Уровень 1. Простыми словами
+`shared/errors.lua` — единый registry. Каждая запись содержит `localeKey`,
+`severity` и `public`. Клиент может отправить через `reportClientError` только код,
+который есть в registry; произвольные строки отклоняются.
 
-Ошибки — это коды, которые помогают понять, что пошло не так.
+| Семейство | Значение |
+| --- | --- |
+| `GC-PAYLOAD-TYPE/SCHEMA/NUMBER-*` | неверный тип, лишнее поле, NaN/Infinity |
+| `GC-PROTOCOL-MISMATCH-*` | protocol не совпадает |
+| `GC-RATE-LIMIT-*` | action limit превышен |
+| `GC-SPAWN-DECISION-*` | отсутствует/истёк/потреблён decision |
+| `GC-SPAWN-OWNER/STATE-*` | чужая session/source или неверный state |
+| `GC-SPAWN-VERIFY-*` | server entity/model/position не подтвердились |
+| `GC-SPAWN-PED-*` | ped config/load/exhaustion |
+| `GC-RESYNC-*` | recovery/resync lifecycle |
 
-## Уровень 2. Техническое объяснение
+Не передавайте внутренний код игроку автоматически. Используйте `GCErrors.IsPublic`
+и локализованный `localeKey`. В лог добавляйте безопасный контекст без полного
+identifier, license key или client-supplied текста.
 
-Формат ошибок:
-
-```text
-GC-<ОБЛАСТЬ>-<НОМЕР>
-```
-
-## Примеры кодов
-
-```text
-GC-BOOT-001
-GC-CONNECTION-001
-GC-IDENTIFIER-001
-GC-SESSION-001
-GC-STATE-001
-GC-PAYLOAD-001
-GC-RATE-LIMIT-001
-GC-SPAWN-001
-GC-SPAWN-002
-GC-CLIENT-001
-GC-SECURITY-001
-GC-INTERNAL-001
-```
-
-## Таблица ошибок
-
-```lua
-GCErrors = {
-    ['GC-CONNECTION-001'] = {
-        localeKey = 'error.connection_invalid_source',
-        severity = 'error',
-        public = false
-    }
-}
-```
-
-## Документация ошибки: `GC-CONNECTION-002`
-
-- **Код**: `GC-CONNECTION-002`
-- **Область**: подключение
-- **Русское описание**: Не удалось подтвердить лицензию FiveM.
-- **Английское описание**: Failed to verify the FiveM license.
-- **Возможные причины**: отсутствует `license` и `license2`
-- **Действия сервера**: отклоняет подключение
-- **Действия клиента**: показывает сообщение
-- **Способ исправления**: проверить конфигурацию `connection.lua`
-- **Можно ли показывать игроку**: да
-
-## Документация ошибки: `GC-SPAWN-002`
-
-- **Код**: `GC-SPAWN-002`
-- **Область**: спавн
-- **Русское описание**: Появление игрока запрещено.
-- **Английское описание**: Player spawn is denied.
-- **Возможные причины**: неверное состояние, поддельный Decision ID
-- **Действия сервера**: отклоняет запрос
-- **Действия клиента**: показывает сообщение
-- **Способ исправления**: проверить жизненный цикл игрока
-- **Можно ли показывать игроку**: да
-
-## Следующий шаг
-
-Перейдите к [Устранению неполадок](14-troubleshooting.md).
+Перейдите к [устранению неполадок](14-troubleshooting.md).

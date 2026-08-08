@@ -22,7 +22,7 @@ GreenCore — это минимальный модульный движок дл
 
 ## Статус разработки
 
-**0.1.0** — первая рабочая версия.
+**0.1.2-alpha** — стабилизированная early-alpha версия.
 
 ## Возможности версии
 
@@ -32,6 +32,8 @@ GreenCore — это минимальный модульный движок дл
 - Управление состояниями игрока
 - Rate limit сетевых событий
 - Серверное решение о спавне
+- Серверная проверка OneSync ped, ownership, model и позиции
+- Recovery без доверия клиентскому `isPedAlive`
 - Клиентский спавн на Lua natives
 - Публичный API v1
 - Локализация RU|EN
@@ -77,7 +79,7 @@ ensure gc_core
 8. Найдите сообщение:
 
 ```text
-[GreenCore] [INFO] gc_core 0.1.0 started successfully
+[GreenCore] [INFO] gc_core 0.1.2-alpha started successfully
 ```
 
 ## Конфигурация
@@ -104,7 +106,9 @@ resources/[greencore]/gc_core/
 | Export                   | Возвращает     | Назначение                |
 | ------------------------ | -------------- | ------------------------- |
 | `GetApiVersion`          | number         | Версия API                |
+| `GetProtocolVersion`     | number         | Версия протокола          |
 | `GetVersion`             | table          | Версия `gc_core`          |
+| `GetVersionString`       | string         | Строка `0.1.2-alpha`      |
 | `IsPlayerConnected`      | boolean        | Проверяет сессию          |
 | `IsPlayerReady`          | boolean        | Проверяет готовность      |
 | `IsPlayerSpawned`        | boolean        | Проверяет спавн           |
@@ -121,10 +125,12 @@ resources/[greencore]/gc_core/
 - [Документация RU](docs/ru/00-introduction.md)
 - [Documentation EN](docs/en/00-introduction.md)
 - [Диаграммы](docs/diagrams/architecture.md)
+- [Runtime и txAdmin](docs/ru/18-runtime-txadmin.md)
+- [Миграция 0.1.1 → 0.1.2](docs/ru/migration/0.1.1-to-0.1.2.md)
 
 ## Тестирование
 
-Все тесты написаны на Lua:
+Все тесты написаны на Lua и загружаются только при явном `gc_runTests 1`:
 
 ```text
 resources/[greencore]/gc_core/tests/

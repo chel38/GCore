@@ -10,7 +10,11 @@ GCConfig = GCConfig or {}
 GCConfig.Security = {
     -- RU: Максимальное количество нарушений rate limit до отключения игрока.
     -- EN: Maximum rate limit violations before disconnecting the player.
-    maxViolationsBeforeKick = 10,
+    maxViolationsPerWindow = 10,
+
+    -- RU: Окно подсчёта нарушений. Старые нарушения автоматически забываются.
+    -- EN: Violation accounting window. Older violations expire automatically.
+    violationWindowMs = 60000,
 
     -- RU: Настройки rate limit для каждого сетевого события.
     -- EN: Rate limit settings for each network event.

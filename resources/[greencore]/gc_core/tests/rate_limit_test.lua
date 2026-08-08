@@ -79,7 +79,7 @@ GCTest.Register('rate_limit.violations', function()
     -- EN: Reach the violation threshold.
     local shouldKick = false
 
-    for _ = 1, (GCConfig.Security.maxViolationsBeforeKick or 10) do
+    for _ = 1, (GCConfig.Security.maxViolationsPerWindow or 10) do
         shouldKick = GCRateLimit.RegisterViolation(playerSource)
     end
 
@@ -105,3 +105,16 @@ GCTest.Register('rate_limit.clear_all', function()
 
     GCTest.ExpectTrue(allowed, 'request is allowed after clear all')
 end)
+
+GCTest.Register('rate_limit.violation_window_expires', function()
+    local playerSource = 45
+    local originalWindow = GCConfig.Security.violationWindowMs
+    GCConfig.Security.violationWindowMs = -1
+    GCRateLimit.RemovePlayer(playerSource)
+    GCRateLimit.RegisterViolation(playerSource)
+
+    GCTest.ExpectEqual(GCRateLimit.GetViolationCount(playerSource), 0, 'expired violations are pruned')
+
+    GCConfig.Security.violationWindowMs = originalWindow
+    GCRateLimit.RemovePlayer(playerSource)
+end, 'security')

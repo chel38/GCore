@@ -94,7 +94,21 @@ GCConfig.Spawn = {
 
         -- RU: Задержка между попытками в миллисекундах.
         -- EN: Delay between attempts in milliseconds.
-        delayMs = 1000
+        delayMs = 1000,
+
+        -- RU: Сколько разных моделей можно попробовать до окончательного отказа.
+        -- EN: Number of distinct models allowed before a terminal failure.
+        maxModelAttempts = 4
+    },
+
+    -- RU: Серверная проверка ped и позиции после клиентского confirmSpawn.
+    -- EN: Server-side ped and position verification after client confirmSpawn.
+    verification = {
+        enabled = true,
+        timeoutMs = 3000,
+        intervalMs = 100,
+        positionTolerance = 8.0,
+        minimumHealth = 1
     },
 
     -- RU: Время жизни решения о спавне в миллисекундах.

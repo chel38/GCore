@@ -4,11 +4,7 @@
 -- RU: Этот файл загружается первым среди client-скриптов.
 -- EN: This file is loaded first among the client scripts.
 
--- RU: Проверяем, что мы на клиенте.
--- EN: Verify that we are on the client.
-if IsDuplicityVersion then
-    error('gc_core client/bootstrap.lua must only run on the client')
-end
+GCRuntime.AssertClient('gc_core client/bootstrap.lua')
 
 -- RU: Инициализируем клиентские сервисы.
 -- EN: Initialize the client services.

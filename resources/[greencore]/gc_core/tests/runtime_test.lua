@@ -1,0 +1,5 @@
+GCTest.Register('runtime.server_context', function()
+    GCTest.ExpectEqual(GCRuntime.Context(), 'server', 'server runtime is detected by calling the native')
+    GCTest.ExpectTrue(GCRuntime.IsServer(), 'server predicate is true')
+    GCTest.ExpectFalse(GCRuntime.IsClient(), 'client predicate is false')
+end, 'runtime')

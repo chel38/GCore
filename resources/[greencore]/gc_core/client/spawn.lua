@@ -176,6 +176,10 @@ function GCClientSpawn.PerformSpawn(payload)
         -- RU: Повреждённый payload: не спавним, сообщаем серверу.
         -- EN: Damaged payload: do not spawn, report to the server.
         GCClientDiagnostics.Report(validationError or 'GC-CLIENT-SPAWN-001')
+        GCClientState.SetSpawnDecisionReceived(false)
+        GCClientState.SetSpawning(false)
+        GCClientState.SetSpawnConfirming(false)
+        GCClientState.SetSpawnError(true)
         return
     end
 
@@ -309,7 +313,7 @@ function GCClientSpawn.PerformSpawn(payload)
 
     -- RU: Отправляем подтверждение серверу (только decisionId).
     -- EN: Send the confirmation to the server (decisionId only).
-    TriggerServerEvent('gc_core:server:confirmSpawn', {
+    TriggerServerEvent(GCEvents.Server.confirmSpawn, {
         decisionId = payload.decisionId
     })
 end

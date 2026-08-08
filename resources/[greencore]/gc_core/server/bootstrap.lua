@@ -8,11 +8,7 @@
 -- EN: Initialize the random number generator.
 math.randomseed(os.time())
 
--- RU: Проверяем, что мы на сервере.
--- EN: Verify that we are on the server.
-if not IsDuplicityVersion then
-    error('gc_core server/bootstrap.lua must only run on the server')
-end
+GCRuntime.AssertServer('gc_core server/bootstrap.lua')
 
 -- RU: Инициализируем серверные сервисы.
 -- EN: Initialize the server services.
@@ -27,6 +23,9 @@ GCNotifications = GCNotifications or {}
 GCDiagnostics = GCDiagnostics or {}
 GCPedProvider = GCPedProvider or {}
 GCSpawnLocationProvider = GCSpawnLocationProvider or {}
+GCPlayers = GCPlayers or {}
+GCAPI = GCAPI or {}
+GCServerRuntime = GCServerRuntime or {}
 
 -- RU: Имя текущего ресурса.
 -- EN: Current resource name.

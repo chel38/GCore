@@ -96,10 +96,11 @@ end
 ---
 --- @param testName string Test name
 --- @param testFunction function Test function
-function GCTest.Register(testName, testFunction)
+function GCTest.Register(testName, testFunction, category)
     table.insert(registeredTests, {
         name = testName,
-        fn = testFunction
+        fn = testFunction,
+        category = category or 'unit'
     })
 end
 
@@ -118,7 +119,7 @@ function GCTest.Run()
     print('=== GreenCore Test Runner ===')
 
     for _, test in ipairs(registeredTests) do
-        print(('--- Running: %s ---'):format(test.name))
+        print(('--- Running [%s]: %s ---'):format(test.category, test.name))
 
         local ok, err = pcall(test.fn)
 

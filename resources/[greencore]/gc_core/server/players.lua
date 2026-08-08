@@ -5,6 +5,57 @@
 -- EN: Player service table.
 GCPlayers = {}
 
+--- Reads the authoritative OneSync entity state for a player's server ped.
+--- Client-provided ped state is never used as proof of spawn or recovery.
+function GCPlayers.GetEntitySnapshot(playerSource)
+    local empty = {
+        exists = false,
+        alive = false,
+        owner = nil,
+        model = nil,
+        position = nil
+    }
+
+    if type(playerSource) ~= 'number' or type(GetPlayerPed) ~= 'function' then
+        return empty
+    end
+
+    local pedOk, ped = pcall(GetPlayerPed, playerSource)
+
+    if not pedOk or type(ped) ~= 'number' or ped == 0 then
+        return empty
+    end
+
+    local existsOk, exists = pcall(DoesEntityExist, ped)
+
+    if not existsOk or not exists then
+        return empty
+    end
+
+    local ownerOk, owner = pcall(NetworkGetEntityOwner, ped)
+    local healthOk, health = pcall(GetEntityHealth, ped)
+    local modelOk, model = pcall(GetEntityModel, ped)
+    local coordsOk, coords = pcall(GetEntityCoords, ped)
+    local minimumHealth = (GCConfig.Spawn.verification or {}).minimumHealth or 1
+
+    return {
+        exists = true,
+        alive = healthOk and GCUtils.IsFiniteNumber(health) and health >= minimumHealth,
+        owner = ownerOk and tonumber(owner) or nil,
+        model = modelOk and model or nil,
+        position = coordsOk and coords and {
+            x = coords.x,
+            y = coords.y,
+            z = coords.z
+        } or nil
+    }
+end
+
+function GCPlayers.HasAuthoritativeLivePed(playerSource)
+    local snapshot = GCPlayers.GetEntitySnapshot(playerSource)
+    return snapshot.exists and snapshot.alive and snapshot.owner == playerSource
+end
+
 --- RU:
 --- Выполняет полную очистку runtime-данных игрока.
 --- Вызывается при отключении игрока из ЛЮБОГО состояния lifecycle.
@@ -179,7 +230,22 @@ function GCPlayers.RecoverOnlinePlayers()
 
                     -- RU: Просим клиента сообщить о своей готовности к resync.
                     -- EN: Ask the client to report its resync readiness.
-                    TriggerClientEvent('gc_core:client:forceResync', playerSource)
+                    TriggerClientEvent(GCEvents.Client.forceResync, playerSource)
+
+                    local sessionId = session.sessionId
+                    SetTimeout(GCConfig.Connection.resyncReadyTimeoutMs or 15000, function()
+                        local currentSession = GCSessions.Get(playerSource)
+
+                        if currentSession
+                            and currentSession.sessionId == sessionId
+                            and GCStates.Is(playerSource, 'resyncing') then
+                            GCStates.Set(playerSource, 'error', 'resync_timeout')
+                            DropPlayer(
+                                playerSource,
+                                GC_T(GCConnection.GetPlayerLocale(playerSource), 'connection.timeout')
+                            )
+                        end
+                    end)
                 else
                     GCLogger.Warn('GC-RESYNC-001', 'Failed to recover player session', {
                         source = playerSource,

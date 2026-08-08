@@ -1,5 +1,5 @@
 -- RU: Манифест ресурса gc_core.
--- RU: Весь runtime написан на Lua (сервер, клиент, shared, config, locales, tests).
+-- RU: Весь production runtime написан на Lua (сервер, клиент, shared, config).
 -- EN: gc_core resource manifest.
 -- EN: The entire runtime is written in Lua (server, client, shared, config, locales, tests).
 
@@ -11,9 +11,9 @@ game 'gta5'
 -- EN: Note: the lua54 directive is not added because it is optional for the
 -- EN: current FXServer and is no longer required.
 
-author 'GreenCore Team'
+author 'GCore Project'
 description 'GreenCore modular engine core resource'
-version '0.1.0'
+version '0.1.2-alpha'
 
 -- RU: Подключаем общие файлы, доступные серверу и клиенту.
 -- RU: custom.example.lua НЕ подключается в runtime — он перенесён в examples/locales.
@@ -31,10 +31,13 @@ shared_scripts {
     'locales/ru.lua',
 
     'shared/bootstrap.lua',
+    'shared/runtime.lua',
     'shared/version.lua',
     'shared/constants.lua',
     'shared/errors.lua',
     'shared/utils.lua',
+    'shared/ids.lua',
+    'shared/events.lua',
     'shared/locale.lua',
     'shared/logger.lua',
     'shared/validation.lua'
@@ -56,8 +59,10 @@ server_scripts {
     'server/players.lua',
     'server/notifications.lua',
     'server/events.lua',
+    'server/api.lua',
     'server/exports.lua',
     'server/diagnostics.lua',
+    'server/test_loader.lua',
     'server/main.lua'
 }
 
@@ -73,23 +78,10 @@ client_scripts {
     'client/main.lua'
 }
 
--- RU: Подключаем тесты на серверной стороне.
--- RU: Тесты регистрируются, но ЗАПУСКАЮТСЯ только при GCConfig.Tests.enabled
--- RU: или convar gc_runTests 1 (см. tests/run.lua). По умолчанию выключено.
--- EN: Load tests on the server side.
--- EN: Tests are registered but only RUN when GCConfig.Tests.enabled is set or
--- EN: the gc_runTests convar is 1 (see tests/run.lua). Disabled by default.
-server_scripts {
-    'tests/test_runner.lua',
-    'tests/validation_test.lua',
-    'tests/states_test.lua',
-    'tests/sessions_test.lua',
-    'tests/connection_test.lua',
-    'tests/spawn_test.lua',
-    'tests/protocol_test.lua',
-    'tests/ped_provider_test.lua',
-    'tests/logger_test.lua',
-    'tests/rate_limit_test.lua',
-    'tests/notifications_test.lua',
-    'tests/run.lua'
+-- RU: Тесты упаковываются, но не исполняются в production runtime. Явный
+-- RU: server/test_loader.lua загружает их только при gc_runTests=1.
+-- EN: Tests are packaged but never executed in production runtime. The explicit
+-- EN: server/test_loader.lua loads them only when gc_runTests=1.
+files {
+    'tests/*.lua'
 }

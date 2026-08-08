@@ -7,7 +7,7 @@ GCNotifications = {}
 
 -- RU: Имя клиентского события уведомления.
 -- EN: Client notification event name.
-local NOTIFY_EVENT = 'gc_core:client:notify'
+local NOTIFY_EVENT = GCEvents.Client.notify
 
 -- RU: Максимальная длина сообщения уведомления.
 -- EN: Maximum notification message length.

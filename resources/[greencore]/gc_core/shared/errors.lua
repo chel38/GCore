@@ -77,6 +77,16 @@ GCErrors = {
         severity = 'warn',
         public = false
     },
+    ['GC-PAYLOAD-SCHEMA-001'] = {
+        localeKey = 'error.invalid_payload',
+        severity = 'warn',
+        public = false
+    },
+    ['GC-PAYLOAD-NUMBER-001'] = {
+        localeKey = 'error.invalid_payload',
+        severity = 'warn',
+        public = false
+    },
 
     -- RU: Ошибки rate limit.
     -- EN: Rate limit errors.
@@ -103,11 +113,61 @@ GCErrors = {
         severity = 'error',
         public = true
     },
+    ['GC-SPAWN-OWNER-001'] = {
+        localeKey = 'spawn.rejected',
+        severity = 'warn',
+        public = false
+    },
+    ['GC-SPAWN-STATE-001'] = {
+        localeKey = 'spawn.rejected',
+        severity = 'warn',
+        public = false
+    },
+    ['GC-SPAWN-VERIFY-001'] = {
+        localeKey = 'spawn.failed',
+        severity = 'error',
+        public = false
+    },
+    ['GC-SPAWN-VERIFY-MODEL-001'] = {
+        localeKey = 'spawn.failed',
+        severity = 'warn',
+        public = false
+    },
+    ['GC-SPAWN-VERIFY-POSITION-001'] = {
+        localeKey = 'spawn.failed',
+        severity = 'warn',
+        public = false
+    },
+    ['GC-SPAWN-PED-EXHAUSTED-001'] = {
+        localeKey = 'spawn.failed',
+        severity = 'error',
+        public = false
+    },
 
     -- RU: Ошибки клиента.
     -- EN: Client errors.
     ['GC-CLIENT-001'] = {
         localeKey = 'error.internal',
+        severity = 'error',
+        public = false
+    },
+    ['GC-CLIENT-READY-001'] = {
+        localeKey = 'error.internal',
+        severity = 'error',
+        public = false
+    },
+    ['GC-CLIENT-SPAWN-001'] = {
+        localeKey = 'spawn.failed',
+        severity = 'error',
+        public = false
+    },
+    ['GC-CLIENT-SPAWN-002'] = {
+        localeKey = 'spawn.rejected',
+        severity = 'warn',
+        public = false
+    },
+    ['GC-SPAWN-TIMEOUT-001'] = {
+        localeKey = 'spawn.failed',
         severity = 'error',
         public = false
     },
