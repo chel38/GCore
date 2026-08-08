@@ -5,7 +5,7 @@
 > **GreenCore использует Lua 5.4 для всей серверной и клиентской логики.**
 > **GreenCore uses Lua 5.4 for all server-side and client-side logic.**
 
-**Только Lua. Никакого C#. / Lua only. No C#.**
+**Логика — только Lua. NUI — TypeScript + Tailwind. / Lua for logic. TypeScript + Tailwind for NUI.**
 
 ---
 
@@ -43,7 +43,6 @@ GreenCore — это минимальный модульный движок дл
 - Базу данных
 - Деньги, инвентарь, транспорт
 - Чат, HUD, админ-панель
-- NUI / HTML / CSS / JavaScript
 
 ## Требования
 

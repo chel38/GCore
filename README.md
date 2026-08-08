@@ -5,7 +5,7 @@
 > **GreenCore uses Lua 5.4 for all server-side and client-side logic.**
 > **GreenCore использует Lua 5.4 для всей серверной и клиентской логики.**
 
-**Только Lua. Никакого C#. / Lua only. No C#.**
+**Логика — только Lua. NUI — TypeScript + Tailwind. / Lua for logic. TypeScript + Tailwind for NUI.**
 
 ---
 
@@ -50,7 +50,6 @@ Connection → Validation → Session → Client readiness → Spawn → Confirm
 - Базу данных / Database
 - Деньги, инвентарь, транспорт / Money, inventory, vehicles
 - Чат, HUD, админ-панель / Chat, HUD, admin panel
-- NUI / HTML / CSS / JavaScript
 
 ## Требования / Requirements
 

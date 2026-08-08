@@ -37,6 +37,7 @@ Server is the source of truth.
 | --------- | ---------- |
 | Сервер    | Lua 5.4    |
 | Клиент    | Lua 5.4    |
+| NUI (интерфейсы, HUD) | TypeScript + Tailwind CSS |
 | Конфигурация | Lua 5.4 |
 | Локализация | Lua 5.4 |
 | Тесты     | Lua 5.4    |
@@ -48,7 +49,6 @@ Server is the source of truth.
 - База данных
 - Деньги, инвентарь, транспорт
 - Чат, HUD, админ-панель
-- NUI / HTML / CSS / JavaScript
 
 ## Структура проекта
 

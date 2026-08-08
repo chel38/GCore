@@ -4,12 +4,21 @@
 
 ## Язык проекта / Project language
 
-Весь код проекта пишется **только на Lua 5.4**.
-All project code is written **only in Lua 5.4**.
+Код игровой логики (сервер и клиент) пишется **только на Lua 5.4**.
+Game logic code (server and client) is written **only in Lua 5.4**.
+
+Клиентская NUI-часть (интерфейсы, HUD, окна) пишется на **TypeScript + Tailwind CSS**.
+Client-side NUI (interfaces, HUD, windows) is written with **TypeScript + Tailwind CSS**.
+
+NUI-код (TypeScript) компилируется в JavaScript и подключается как статический ресурс;
+JavaScript в NUI используется только как результат сборки, напрямую его не пишем.
+NUI code (TypeScript) is compiled to JavaScript and shipped as a static resource;
+JavaScript within NUI is only a build output, not written by hand.
 
 Запрещены / Forbidden:
 
-- C#, JavaScript, TypeScript, Python, Node.js
+- C#, Python, Node.js (серверные/отдельные рантаймы) / C#, Python, Node.js (server / standalone runtimes)
+- Ручной JavaScript без сборки из TypeScript / Hand-written JavaScript without a TypeScript build
 - JSON для конфигурации и локализации / JSON for configuration and localization
 - Базы данных / Databases
 - Внешние бинарные зависимости / External binary dependencies

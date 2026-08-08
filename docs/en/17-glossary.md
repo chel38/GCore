@@ -45,7 +45,13 @@ The client only performs allowed actions.
 The client can only request an action.
 The server decides whether to allow it.
 
-### Lua only
+### Lua only for logic
 
-All project code is written in Lua 5.4.
-No C#, JavaScript, TypeScript, Python, Node.js.
+All game logic code (server and client) is written in Lua 5.4.
+No C#, Python, Node.js.
+
+### NUI — TypeScript + Tailwind
+
+The client-side NUI (interfaces, HUD, windows) is written with TypeScript + Tailwind CSS.
+TypeScript is compiled to JavaScript and shipped as a static resource;
+JavaScript is not written by hand.

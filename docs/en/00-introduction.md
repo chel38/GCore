@@ -37,6 +37,7 @@ The client can only:
 | --------- | ---------- |
 | Server    | Lua 5.4    |
 | Client    | Lua 5.4    |
+| NUI (interfaces, HUD) | TypeScript + Tailwind CSS |
 | Configuration | Lua 5.4 |
 | Localization | Lua 5.4 |
 | Tests     | Lua 5.4    |
@@ -48,7 +49,6 @@ The client can only:
 - Database
 - Money, inventory, vehicles
 - Chat, HUD, admin panel
-- NUI / HTML / CSS / JavaScript
 
 ## Project structure
 
