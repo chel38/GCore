@@ -32,6 +32,71 @@ GCConfig.Spawn = {
         model = `mp_m_freemode_01`
     },
 
+    -- RU: Запасной ped, используемый, когда случайный список пуст или модель не загружается.
+    -- EN: Fallback ped used when the random list is empty or a model fails to load.
+    fallbackPed = 'mp_m_freemode_01',
+
+    -- RU: Настройки случайного выбора модели педа.
+    -- RU: Выбор модели всегда выполняет сервер; клиент получает уже готовое решение.
+    -- EN: Random ped model selection settings.
+    -- EN: The server always chooses the model; the client receives the finished decision.
+    randomPed = {
+        -- RU: Включён ли случайный выбор модели.
+        -- EN: Whether random model selection is enabled.
+        enabled = true,
+
+        -- RU: Избегать немедленного повтора одной и той же модели подряд.
+        -- EN: Avoid repeating the same model immediately.
+        avoidImmediateRepeat = true,
+
+        -- RU: Явно заданный белый список моделей. Только эти модели могут быть выбраны.
+        -- EN: Explicit whitelist of models. Only these models may be selected.
+        models = {
+            'a_m_y_business_01',
+            'a_m_y_business_02',
+            'a_m_y_business_03',
+
+            'a_m_y_hipster_01',
+            'a_m_y_hipster_02',
+            'a_m_y_hipster_03',
+
+            'a_m_y_beach_01',
+            'a_m_y_beach_02',
+
+            'a_m_m_business_01',
+
+            'a_f_y_business_01',
+            'a_f_y_business_02',
+            'a_f_y_business_03',
+            'a_f_y_business_04',
+
+            'a_f_y_hipster_01',
+            'a_f_y_hipster_02',
+            'a_f_y_hipster_03',
+            'a_f_y_hipster_04',
+
+            'a_f_y_beach_01'
+        }
+    },
+
+    -- RU: Настройки повторных попыток спавна.
+    -- RU: Повтор выполняется только по решению сервера, чтобы не создать бесконечный цикл.
+    -- EN: Spawn retry settings.
+    -- EN: Retries are executed only on server decision to avoid an infinite loop.
+    retry = {
+        -- RU: Включены ли повторные попытки.
+        -- EN: Whether retries are enabled.
+        enabled = true,
+
+        -- RU: Максимальное количество попыток.
+        -- EN: Maximum number of attempts.
+        maxAttempts = 2,
+
+        -- RU: Задержка между попытками в миллисекундах.
+        -- EN: Delay between attempts in milliseconds.
+        delayMs = 1000
+    },
+
     -- RU: Время жизни решения о спавне в миллисекундах.
     -- EN: Spawn decision lifetime in milliseconds.
     decisionLifetimeMs = 30000,
@@ -47,6 +112,10 @@ GCConfig.Spawn = {
     -- RU: Тайм-аут клиентского спавна в миллисекундах.
     -- EN: Client spawn timeout in milliseconds.
     clientSpawnTimeoutMs = 20000,
+
+    -- RU: Тайм-аут затемнения экрана в миллисекундах.
+    -- EN: Screen fade-out timeout in milliseconds.
+    fadeOutTimeoutMs = 2000,
 
     -- RU: Длительность затемнения экрана в миллисекундах.
     -- EN: Screen fade-out duration in milliseconds.

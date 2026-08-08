@@ -4,20 +4,17 @@
 
 ## Язык проекта / Project language
 
-Код игровой логики (сервер и клиент) пишется **только на Lua 5.4**.
-Game logic code (server and client) is written **only in Lua 5.4**.
+Runtime ядра `gc_core` (сервер, клиент, shared, config, locales, tests) пишется **только на Lua 5.4**.
+The `gc_core` core runtime (server, client, shared, config, locales, tests) is written **only in Lua 5.4**.
 
-Клиентская NUI-часть (интерфейсы, HUD, окна) пишется на **TypeScript + Tailwind CSS**.
-Client-side NUI (interfaces, HUD, windows) is written with **TypeScript + Tailwind CSS**.
-
-NUI-код (TypeScript) компилируется в JavaScript и подключается как статический ресурс;
-JavaScript в NUI используется только как результат сборки, напрямую его не пишем.
-NUI code (TypeScript) is compiled to JavaScript and shipped as a static resource;
-JavaScript within NUI is only a build output, not written by hand.
+Дальнейшая разработка и добавление **NUI** будут использовать **TypeScript + Tailwind CSS**
+и другие современные технологии, поддерживаемые FiveM.
+Further development and adding **NUI** will use **TypeScript + Tailwind CSS**
+and other modern FiveM-supported technologies.
 
 Запрещены / Forbidden:
 
-- C#, Python, Node.js (серверные/отдельные рантаймы) / C#, Python, Node.js (server / standalone runtimes)
+- C# (не используется) / C# (not used)
 - Ручной JavaScript без сборки из TypeScript / Hand-written JavaScript without a TypeScript build
 - JSON для конфигурации и локализации / JSON for configuration and localization
 - Базы данных / Databases

@@ -17,8 +17,7 @@ resources/[greencore]/gc_core/
 │
 ├── locales/
 │   ├── ru.lua
-│   ├── en.lua
-│   └── custom.example.lua
+│   └── en.lua
 │
 ├── shared/
 │   ├── bootstrap.lua
@@ -41,6 +40,8 @@ resources/[greencore]/gc_core/
 │   ├── spawn.lua
 │   ├── rate_limit.lua
 │   ├── security.lua
+│   ├── ped_provider.lua
+│   ├── spawn_location.lua
 │   ├── notifications.lua
 │   ├── events.lua
 │   ├── exports.lua
@@ -62,6 +63,9 @@ resources/[greencore]/gc_core/
     ├── sessions_test.lua
     ├── connection_test.lua
     ├── spawn_test.lua
+    ├── protocol_test.lua
+    ├── ped_provider_test.lua
+    ├── logger_test.lua
     ├── rate_limit_test.lua
     ├── notifications_test.lua
     └── run.lua
@@ -78,6 +82,10 @@ resources/[greencore]/gc_core/
 | `client/` | Клиентская логика |
 | `tests/` | Lua-тесты |
 
+Необязательный шаблон локализации находится вне runtime-ресурса:
+`examples/locales/custom.lua`. Для своего языка скопируйте его в `locales/`
+под новым именем и добавьте этот файл в `fxmanifest.lua`.
+
 ## Порядок загрузки
 
 ### Shared (общий)
@@ -91,7 +99,8 @@ config/* → locales/* → shared/bootstrap → shared/version → shared/consta
 
 ```text
 server/bootstrap → server/identifiers → server/sessions → server/states
-→ server/rate_limit → server/security → server/connection → server/spawn
+→ server/rate_limit → server/security → server/ped_provider → server/spawn_location
+→ server/connection → server/spawn
 → server/players → server/notifications → server/events → server/exports
 → server/diagnostics → server/main
 ```

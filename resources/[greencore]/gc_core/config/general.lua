@@ -32,3 +32,19 @@ GCConfig.General = {
     -- EN: Network protocol version between client and server.
     protocolVersion = 1
 }
+
+-- RU: Настройки тестов.
+-- RU: Тесты НЕ запускаются автоматически при обычном запуске gc_core.
+-- RU: Разрешаются только явно: config enabled или convar gc_runTests 1.
+-- EN: Test settings.
+-- EN: Tests do NOT run automatically on a normal gc_core startup.
+-- EN: They are enabled only explicitly: config enabled or convar gc_runTests 1.
+GCConfig.Tests = {
+    -- RU: Включены ли тесты. По умолчанию выключено для продакшена.
+    -- EN: Whether tests are enabled. Disabled by default for production.
+    enabled = false,
+
+    -- RU: Имя convar для запуска тестов (например, set gc_runTests 1).
+    -- EN: Convar name to run tests (e.g., set gc_runTests 1).
+    convar = 'gc_runTests'
+}

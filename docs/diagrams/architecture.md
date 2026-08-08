@@ -52,3 +52,4 @@ Lua Spawn Service
 gc_core Client Lua
     ↓  Подтверждение / Confirmation
 gc_core Server Lua
+```

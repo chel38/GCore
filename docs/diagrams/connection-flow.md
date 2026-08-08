@@ -76,3 +76,4 @@ gc_core Client Lua
     ↓  confirmSpawn
 gc_core Server Lua
     ↓  Игрок появился / Player spawned
+```

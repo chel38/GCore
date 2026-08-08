@@ -109,6 +109,12 @@ end
 --- EN:
 --- Runs all registered tests.
 function GCTest.Run()
+    -- RU: Каждый ручной запуск должен иметь независимые счётчики.
+    -- EN: Every manual run must start with independent counters.
+    passed = 0
+    failed = 0
+    total = 0
+
     print('=== GreenCore Test Runner ===')
 
     for _, test in ipairs(registeredTests) do
@@ -131,4 +137,6 @@ function GCTest.Run()
     else
         print('SOME TESTS FAILED')
     end
+
+    return failed == 0
 end

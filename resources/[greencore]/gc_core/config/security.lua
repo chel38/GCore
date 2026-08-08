@@ -53,6 +53,14 @@ GCConfig.Security = {
             intervalMs = 1000,
             maxAttempts = 10,
             windowMs = 30000
+        },
+
+        -- RU: Ограничение для ответа о готовности к resync после рестарта.
+        -- EN: Rate limit for the resync-ready response after a restart.
+        resyncReady = {
+            intervalMs = 2000,
+            maxAttempts = 3,
+            windowMs = 15000
         }
     }
 }

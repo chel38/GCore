@@ -7,8 +7,8 @@ GCTest.Register('connection.mask_identifier', function()
     local masked = GCIdentifiers.Mask('license:12ab34cd56ef7890')
 
     GCTest.ExpectNotNil(masked, 'identifier is masked')
-    GCTest.ExpectTrue(masked:find('^license:'), 'masked identifier keeps type prefix')
-    GCTest.ExpectFalse(masked:find('12ab34cd56ef7890'), 'masked identifier hides full value')
+    GCTest.ExpectTrue(masked:find('^license:') ~= nil, 'masked identifier keeps type prefix')
+    GCTest.ExpectTrue(masked:find('12ab34cd56ef7890', 1, true) == nil, 'masked identifier hides full value')
 end)
 
 -- RU: Тест маскировки короткого идентификатора.
@@ -17,7 +17,7 @@ GCTest.Register('connection.mask_short_identifier', function()
     local masked = GCIdentifiers.Mask('license:abc')
 
     GCTest.ExpectNotNil(masked, 'short identifier is masked')
-    GCTest.ExpectTrue(masked:find('^license:'), 'short masked identifier keeps type prefix')
+    GCTest.ExpectTrue(masked:find('^license:') ~= nil, 'short masked identifier keeps type prefix')
 end)
 
 -- RU: Тест маскировки невалидного идентификатора.
@@ -39,15 +39,14 @@ end)
 -- RU: Тест получения основного идентификатора.
 -- EN: Test of getting the primary identifier.
 GCTest.Register('connection.get_primary', function()
-    -- RU: Создаём тестовую сессию с license.
-    -- EN: Create a test session with license.
+    -- RU: Создаём тестовую сессию с license через pending + promote.
+    -- EN: Create a test session with license via pending + promote.
     local identifiers = {
         license = 'license:test-primary-1'
     }
 
-    GCSessions.Create(10, 'TestPlayer10', identifiers)
-
-    local session = GCSessions.Get(10)
+    GCSessions.CreatePendingConnection(60010, 'TestPlayer10', identifiers, identifiers.license, 'license')
+    local session, _ = GCSessions.PromotePendingConnection(60010, 10)
 
     GCTest.ExpectNotNil(session, 'session is created')
     GCTest.ExpectEqual(session.primaryIdentifierType, 'license', 'primary type is license')
@@ -65,9 +64,8 @@ GCTest.Register('connection.get_fallback', function()
         license2 = 'license2:test-fallback-1'
     }
 
-    GCSessions.Create(11, 'TestPlayer11', identifiers)
-
-    local session = GCSessions.Get(11)
+    GCSessions.CreatePendingConnection(60011, 'TestPlayer11', identifiers, identifiers.license2, 'license2')
+    local session, _ = GCSessions.PromotePendingConnection(60011, 11)
 
     GCTest.ExpectNotNil(session, 'session is created')
     GCTest.ExpectEqual(session.primaryIdentifierType, 'license2', 'primary type is license2')

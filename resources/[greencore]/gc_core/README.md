@@ -1,7 +1,11 @@
 # gc_core
 
-> **GreenCore uses Lua 5.4 for all server-side and client-side logic.**
-> **GreenCore использует Lua 5.4 для всей серверной и клиентской логики.**
+> **GreenCore runtime is 100% Lua.**
+> **GreenCore runtime полностью написан на Lua.**
+>
+> Сервер, клиент, shared, config, locales и tests `gc_core` — всё на Lua.
+> Дальнейшая разработка и добавление **NUI** будут использовать **TypeScript + Tailwind CSS**
+> и другие современные технологии, поддерживаемые FiveM. **C# использоваться не будет.**
 
 Единственный системный ресурс модульного движка GreenCore.
 The single system resource of the GreenCore modular engine.
@@ -37,7 +41,7 @@ ensure gc_core
 | `IsPlayerReady`          | boolean        | Проверяет готовность      |
 | `IsPlayerSpawned`        | boolean        | Проверяет спавн           |
 | `GetPlayerState`         | string или nil | Возвращает состояние      |
-| `GetPlayerSession`       | table или nil  | Возвращает копию сессии   |
+| `GetPlayerSession`       | table или nil  | Безопасный DTO сессии     |
 | `GetPlayerIdentifier`    | string или nil | Возвращает идентификатор  |
 | `CanUseGameplayFeatures` | boolean        | Разрешает игровые функции |
 | `RequestPlayerSpawn`     | table или nil  | Запрашивает спавн         |
@@ -52,3 +56,4 @@ ensure gc_core
 docs/ru/
 docs/en/
 docs/diagrams/
+```

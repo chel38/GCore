@@ -6,82 +6,56 @@
 GCClientSpawn = {}
 
 --- RU:
---- Проверяет корректность решения о спавне.
----
---- EN:
---- Validates the spawn decision.
----
---- @param payload any Spawn decision payload
---- @return boolean valid Whether the decision is valid
-local function validateSpawnPayload(payload)
-    -- RU: Payload должен быть таблицей.
-    -- EN: Payload must be a table.
-    if type(payload) ~= 'table' then
-        return false
-    end
-
-    -- RU: decisionId должен быть строкой.
-    -- EN: decisionId must be a string.
-    if type(payload.decisionId) ~= 'string' then
-        return false
-    end
-
-    -- RU: position должен быть таблицей.
-    -- EN: position must be a table.
-    if type(payload.position) ~= 'table' then
-        return false
-    end
-
-    -- RU: Координаты должны быть числами.
-    -- EN: Coordinates must be numbers.
-    if type(payload.position.x) ~= 'number' then
-        return false
-    end
-
-    if type(payload.position.y) ~= 'number' then
-        return false
-    end
-
-    if type(payload.position.z) ~= 'number' then
-        return false
-    end
-
-    if type(payload.position.heading) ~= 'number' then
-        return false
-    end
-
-    -- RU: model должен быть числом (hash).
-    -- EN: model must be a number (hash).
-    if type(payload.model) ~= 'number' then
-        return false
-    end
-
-    return true
-end
-
---- RU:
 --- Загружает модель педа с тайм-аутом.
+--- Сначала проверяет валидность модели, затем запрашивает её загрузку.
 ---
 --- EN:
 --- Loads the ped model with a timeout.
+--- First validates the model, then requests its loading.
 ---
 --- @param modelHash number Model hash
+--- @param modelName string Model name (for diagnostics)
 --- @return boolean loaded Whether the model was loaded
 --- @return string|nil errorCode Error code
-local function loadModel(modelHash)
+local function loadModel(modelHash, modelName)
+    -- RU: Проверяем, что модель существует в игре.
+    -- EN: Verify that the model exists in the game.
+    if not IsModelInCdimage(modelHash) then
+        return false, 'GC-SPAWN-PED-LOAD-001'
+    end
+
+    -- RU: Проверяем, что модель валидна.
+    -- EN: Verify that the model is valid.
+    if not IsModelValid(modelHash) then
+        return false, 'GC-SPAWN-PED-LOAD-001'
+    end
+
+    -- RU: Проверяем, что модель является ped.
+    -- EN: Verify that the model is a ped.
+    if not IsModelAPed(modelHash) then
+        return false, 'GC-SPAWN-PED-LOAD-001'
+    end
+
+    -- RU: Запрашиваем загрузку модели.
+    -- EN: Request the model loading.
     RequestModel(modelHash)
 
     local startedAt = GetGameTimer()
-    local timeoutMs = GCConfig.Spawn.modelLoadTimeoutMs
+    local timeoutMs = GCConfig.Spawn.modelLoadTimeoutMs or 10000
 
     -- RU: Ограниченный цикл ожидания загрузки модели.
+    -- RU: Никакого бесконечного while not HasModelLoaded(...).
     -- EN: Bounded loop waiting for the model to load.
+    -- EN: No infinite while not HasModelLoaded(...).
     while not HasModelLoaded(modelHash) do
         if GetGameTimer() - startedAt >= timeoutMs then
-            return false, 'GC-SPAWN-MODEL-001'
+            -- RU: Освобождаем модель при тайм-ауте.
+            -- EN: Release the model on timeout.
+            SetModelAsNoLongerNeeded(modelHash)
+            return false, 'GC-SPAWN-PED-TIMEOUT-001'
         end
 
-        Wait(100)
+        Wait(50)
     end
 
     return true
@@ -93,20 +67,23 @@ end
 --- EN:
 --- Loads the collision around a point with a timeout.
 ---
+--- @param ped number Ped entity to check collision around
 --- @param x number X coordinate
 --- @param y number Y coordinate
 --- @param z number Z coordinate
 --- @return boolean loaded Whether the collision was loaded
 --- @return string|nil errorCode Error code
-local function loadCollision(x, y, z)
+local function loadCollision(ped, x, y, z)
     RequestCollisionAtCoord(x, y, z)
 
     local startedAt = GetGameTimer()
-    local timeoutMs = GCConfig.Spawn.collisionLoadTimeoutMs
+    local timeoutMs = GCConfig.Spawn.collisionLoadTimeoutMs or 10000
 
     -- RU: Ограниченный цикл ожидания загрузки коллизии.
     -- EN: Bounded loop waiting for the collision to load.
-    while not HasCollisionLoadedAroundEntity(PlayerPedId()) do
+    while not HasCollisionLoadedAroundEntity(ped) do
+        RequestCollisionAtCoord(x, y, z)
+
         if GetGameTimer() - startedAt >= timeoutMs then
             return false, 'GC-SPAWN-COLLISION-001'
         end
@@ -118,27 +95,59 @@ local function loadCollision(x, y, z)
 end
 
 --- RU:
---- Прерывает спавн при ошибке: размораживает ped, возвращает изображение,
---- сбрасывает флаг спавна и сообщает серверу код ошибки.
+--- Ожидает полного затемнения экрана с тайм-аутом.
 ---
 --- EN:
---- Aborts the spawn on error: unfreezes the ped, restores the image,
---- resets the spawn flag, and reports the error code to the server.
+--- Waits for the screen to be fully faded out with a timeout.
+---
+--- @return boolean fadedOut Whether the screen is faded out
+local function waitForFadeOut()
+    local startedAt = GetGameTimer()
+    local timeoutMs = GCConfig.Spawn.fadeOutTimeoutMs or 2000
+
+    while not IsScreenFadedOut() do
+        if GetGameTimer() - startedAt >= timeoutMs then
+            return false
+        end
+
+        Wait(50)
+    end
+
+    return true
+end
+
+--- RU:
+--- Прерывает спавн при ошибке: размораживает ped, возвращает управление игроку,
+--- возвращает изображение и сообщает серверу код ошибки.
+---
+--- EN:
+--- Aborts the spawn on error: unfreezes the ped, restores player control, restores
+--- the image, and reports the error code to the server.
 ---
 --- @param ped number Ped to unfreeze
 --- @param errorCode string Error code to report
-local function abortSpawn(ped, errorCode)
+--- @param hadControl boolean Whether player control was disabled
+local function abortSpawn(ped, errorCode, hadControl)
     -- RU: Размораживаем ped.
     -- EN: Unfreeze the ped.
-    FreezeEntityPosition(ped, false)
+    if type(ped) == 'number' and DoesEntityExist(ped) then
+        FreezeEntityPosition(ped, false)
+    end
+
+    -- RU: Возвращаем управление игроку, если оно было отключено.
+    -- EN: Restore player control if it was disabled.
+    if hadControl then
+        SetPlayerControl(PlayerId(), true, 0)
+    end
 
     -- RU: Возвращаем изображение.
     -- EN: Restore the image.
-    DoScreenFadeIn(GCConfig.Spawn.fadeInDurationMs)
+    DoScreenFadeIn(GCConfig.Spawn.fadeInDurationMs or 1000)
 
-    -- RU: Сбрасываем флаг спавна.
-    -- EN: Reset the spawn flag.
+    -- RU: Сбрасываем флаги спавна.
+    -- EN: Reset the spawn flags.
     GCClientState.SetSpawning(false)
+    GCClientState.SetSpawnConfirming(false)
 
     -- RU: Сообщаем серверу об ошибке.
     -- EN: Report the error to the server.
@@ -147,16 +156,26 @@ end
 
 --- RU:
 --- Выполняет спавн игрока.
+--- Клиент выполняет спавн, но НЕ считает его завершённым самостоятельно:
+--- устанавливается состояние spawn_confirming, а финальное spawned приходит
+--- от сервера (spawnConfirmed).
 ---
 --- EN:
 --- Performs the player spawn.
+--- The client performs the spawn but does NOT consider it complete by itself:
+--- the spawn_confirming state is set, and the final spawned comes from the server
+--- (spawnConfirmed).
 ---
 --- @param payload table Spawn decision payload
 function GCClientSpawn.PerformSpawn(payload)
-    -- RU: Проверяем корректность решения.
-    -- EN: Validate the decision.
-    if not validateSpawnPayload(payload) then
-        GCClientDiagnostics.Report('GC-CLIENT-SPAWN-001')
+    -- RU: Проверяем корректность решения (включая ped.name/hash).
+    -- EN: Validate the decision (including ped.name/hash).
+    local isValid, validationError = GCValidation.SpawnApproved(payload)
+
+    if not isValid then
+        -- RU: Повреждённый payload: не спавним, сообщаем серверу.
+        -- EN: Damaged payload: do not spawn, report to the server.
+        GCClientDiagnostics.Report(validationError or 'GC-CLIENT-SPAWN-001')
         return
     end
 
@@ -176,95 +195,120 @@ function GCClientSpawn.PerformSpawn(payload)
 
     -- RU: Получаем текущий ped.
     -- EN: Get the current ped.
-    local currentPed = PlayerPedId()
+    local oldPed = PlayerPedId()
+
+    -- RU: Получаем hash модели. Предпочитаем серверный hash, иначе вычисляем из имени.
+    -- EN: Get the model hash. Prefer the server hash, otherwise compute from the name.
+    local modelHash = payload.ped.hash
+
+    if type(modelHash) ~= 'number' then
+        modelHash = joaat(payload.ped.name)
+    end
 
     -- RU: Затемняем экран.
     -- EN: Fade out the screen.
-    DoScreenFadeOut(GCConfig.Spawn.fadeOutDurationMs)
+    DoScreenFadeOut(GCConfig.Spawn.fadeOutDurationMs or 500)
+
+    -- RU: Ждём полного затемнения с тайм-аутом.
+    -- EN: Wait for full fade-out with a timeout.
+    if not waitForFadeOut() then
+        abortSpawn(oldPed, 'GC-SPAWN-001', false)
+        return
+    end
 
     -- RU: Замораживаем текущий ped.
     -- EN: Freeze the current ped.
-    FreezeEntityPosition(currentPed, true)
+    FreezeEntityPosition(oldPed, true)
 
-    -- RU: Загружаем модель.
-    -- EN: Load the model.
-    local modelLoaded, modelError = loadModel(payload.model)
+    -- RU: Отключаем управление игроком (будет возвращено после завершения/ошибки).
+    -- EN: Disable player control (will be restored after completion/error).
+    SetPlayerControl(PlayerId(), false, 0)
+    local hadControl = true
+
+    -- RU: Загружаем модель педа.
+    -- EN: Load the ped model.
+    local modelLoaded, modelError = loadModel(modelHash, payload.ped.name)
 
     if not modelLoaded then
-        abortSpawn(currentPed, modelError)
+        abortSpawn(oldPed, modelError, hadControl)
         return
     end
 
     -- RU: Проверяем общий тайм-аут спавна.
     -- EN: Check the overall spawn timeout.
     if GetGameTimer() - spawnStartedAt >= GCConfig.Spawn.clientSpawnTimeoutMs then
-        abortSpawn(currentPed, 'GC-SPAWN-TIMEOUT-001')
+        abortSpawn(oldPed, 'GC-SPAWN-TIMEOUT-001', hadControl)
         return
     end
 
     -- RU: Устанавливаем модель игрока.
     -- EN: Set the player model.
-    SetPlayerModel(PlayerId(), payload.model)
+    SetPlayerModel(PlayerId(), modelHash)
 
-    -- RU: Получаем новый ped.
-    -- EN: Get the new ped.
-    local newPed = PlayerPedId()
+    -- RU: ВАЖНО: после SetPlayerModel старый handle ped устарел, потому что
+    -- RU: модель игрока заменяет сущность ped. Получаем ped заново.
+    -- EN: IMPORTANT: after SetPlayerModel the old ped handle is stale because the
+    -- EN: player model replaces the ped entity. Re-acquire the ped.
+    local playerPed = PlayerPedId()
 
-    -- RU: Устанавливаем координаты.
-    -- EN: Set the coordinates.
-    SetEntityCoordsNoOffset(newPed, payload.position.x, payload.position.y, payload.position.z, false, false, false)
+    -- RU: Устанавливаем серверные координаты.
+    -- EN: Set the server-provided coordinates.
+    SetEntityCoordsNoOffset(playerPed, payload.position.x, payload.position.y, payload.position.z, false, false, false)
 
     -- RU: Устанавливаем heading.
     -- EN: Set the heading.
-    SetEntityHeading(newPed, payload.position.heading)
+    SetEntityHeading(playerPed, payload.position.heading)
 
-    -- RU: Загружаем коллизию.
-    -- EN: Load the collision.
-    local collisionLoaded, collisionError = loadCollision(payload.position.x, payload.position.y, payload.position.z)
+    -- RU: Загружаем коллизию вокруг педа.
+    -- EN: Load the collision around the ped.
+    local collisionLoaded, collisionError = loadCollision(playerPed, payload.position.x, payload.position.y, payload.position.z)
 
     if not collisionLoaded then
-        abortSpawn(newPed, collisionError)
+        abortSpawn(playerPed, collisionError, hadControl)
         return
     end
 
     -- RU: Проверяем общий тайм-аут спавна после загрузки коллизии.
     -- EN: Check the overall spawn timeout after loading the collision.
     if GetGameTimer() - spawnStartedAt >= GCConfig.Spawn.clientSpawnTimeoutMs then
-        abortSpawn(newPed, 'GC-SPAWN-TIMEOUT-001')
+        abortSpawn(playerPed, 'GC-SPAWN-TIMEOUT-001', hadControl)
         return
     end
 
-    -- RU: Очищаем задачи ped.
-    -- EN: Clear the ped tasks.
-    ClearPedTasksImmediately(newPed)
-
-    -- RU: Снимаем нежелательные состояния.
-    -- EN: Remove unwanted states.
-    ClearPedWetness(newPed)
-    ResetPedMovementClipset(newPed, 0.0)
+    -- RU: Приводим ped в нормальное состояние.
+    -- EN: Bring the ped to a normal state.
+    ClearPedTasksImmediately(playerPed)
+    ClearPlayerWantedLevel(PlayerId())
 
     -- RU: Размораживаем ped.
     -- EN: Unfreeze the ped.
-    FreezeEntityPosition(newPed, false)
+    FreezeEntityPosition(playerPed, false)
+
+    -- RU: Возвращаем управление игроку.
+    -- EN: Restore player control.
+    SetPlayerControl(PlayerId(), true, 0)
+    hadControl = false
 
     -- RU: Освобождаем модель.
     -- EN: Release the model.
-    SetModelAsNoLongerNeeded(payload.model)
+    SetModelAsNoLongerNeeded(modelHash)
 
     -- RU: Плавно возвращаем изображение.
     -- EN: Smoothly restore the image.
-    DoScreenFadeIn(GCConfig.Spawn.fadeInDurationMs)
+    DoScreenFadeIn(GCConfig.Spawn.fadeInDurationMs or 1000)
 
     -- RU: Сбрасываем флаг выполнения спавна.
     -- EN: Reset the spawning flag.
     GCClientState.SetSpawning(false)
 
-    -- RU: Устанавливаем флаг завершения спавна.
-    -- EN: Set the spawned flag.
-    GCClientState.SetSpawned(true)
+    -- RU: ВАЖНО: клиент НЕ устанавливает spawned=true. Вместо этого переходит
+    -- RU: в состояние spawn_confirming и ждёт подтверждения сервера.
+    -- EN: IMPORTANT: the client does NOT set spawned=true. Instead it moves to
+    -- EN: the spawn_confirming state and waits for the server confirmation.
+    GCClientState.SetSpawnConfirming(true)
 
-    -- RU: Отправляем подтверждение серверу.
-    -- EN: Send the confirmation to the server.
+    -- RU: Отправляем подтверждение серверу (только decisionId).
+    -- EN: Send the confirmation to the server (decisionId only).
     TriggerServerEvent('gc_core:server:confirmSpawn', {
         decisionId = payload.decisionId
     })

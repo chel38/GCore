@@ -10,7 +10,8 @@ stateDiagram-v2
     joining --> client_ready
     client_ready --> spawn_pending
     spawn_pending --> spawning
-    spawning --> spawned
+    spawning --> spawn_confirming
+    spawn_confirming --> spawned
     spawned --> disconnecting
     disconnecting --> disconnected
     disconnected --> [*]
@@ -21,6 +22,7 @@ stateDiagram-v2
     client_ready --> error
     spawn_pending --> error
     spawning --> error
+    spawn_confirming --> error
     error --> disconnecting
 ```
 
@@ -32,6 +34,7 @@ stateDiagram-v2
 - **client_ready**: клиент готов.
 - **spawn_pending**: спавн подготавливается.
 - **spawning**: выполняется спавн.
+- **spawn_confirming**: сервер ожидает подтверждение спавна.
 - **spawned**: игрок появился.
 - **disconnecting**: игрок отключается.
 - **disconnected**: игрок отключён.
@@ -46,6 +49,7 @@ stateDiagram-v2
 - **client_ready**: the client is ready.
 - **spawn_pending**: spawn is being prepared.
 - **spawning**: spawn is in progress.
+- **spawn_confirming**: the server waits for spawn confirmation.
 - **spawned**: the player has spawned.
 - **disconnecting**: the player is disconnecting.
 - **disconnected**: the player disconnected.
@@ -56,7 +60,7 @@ stateDiagram-v2
 
 ```text
 [*] → connecting → validated → joining → client_ready
-      → spawn_pending → spawning → spawned
+      → spawn_pending → spawning → spawn_confirming → spawned
       → disconnecting → disconnected → [*]
 
 connecting → rejected
@@ -65,4 +69,6 @@ joining → error
 client_ready → error
 spawn_pending → error
 spawning → error
+spawn_confirming → error
 error → disconnecting
+```

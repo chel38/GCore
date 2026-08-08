@@ -25,6 +25,8 @@ GCRateLimit = GCRateLimit or {}
 GCSecurity = GCSecurity or {}
 GCNotifications = GCNotifications or {}
 GCDiagnostics = GCDiagnostics or {}
+GCPedProvider = GCPedProvider or {}
+GCSpawnLocationProvider = GCSpawnLocationProvider or {}
 
 -- RU: Имя текущего ресурса.
 -- EN: Current resource name.
@@ -44,3 +46,8 @@ end
 GCLogger.Info('GC-BOOT-100', 'gc_core server bootstrap loaded', {
     version = GCVersion.GetString()
 })
+
+-- RU: Проверки конфигурации и фоновые задачи запускаются из server/main.lua,
+-- RU: когда все серверные сервисы уже загружены манифестом.
+-- EN: Configuration validation and background jobs are started from
+-- EN: server/main.lua after all server services have been loaded by the manifest.

@@ -27,6 +27,103 @@ local LEVEL_ORDER = {
     'CRITICAL'
 }
 
+-- RU: Список чувствительных ключей, значения которых маскируются автоматически.
+-- RU: Это защищает от случайной утечки идентификаторов в логах, даже если
+-- RU: разработчик забыл вызвать маскирование вручную.
+-- EN: List of sensitive keys whose values are masked automatically.
+-- EN: This protects against accidental identifier leaks in logs even when a
+-- EN: developer forgets to call masking manually.
+local SENSITIVE_KEYS = {
+    license = true,
+    license2 = true,
+    ip = true,
+    discord = true,
+    identifiers = true,
+    primaryIdentifier = true,
+    token = true,
+    steam = true,
+    xbl = true,
+    live = true
+}
+
+--- RU:
+--- Проверяет, является ли ключ чувствительным.
+---
+--- EN:
+--- Checks whether a key is sensitive.
+---
+--- @param key string Key to check
+--- @return boolean sensitive Whether the key is sensitive
+local function isSensitiveKey(key)
+    return SENSITIVE_KEYS[tostring(key)] == true
+end
+
+--- RU:
+--- Маскирует строку, сохраняя только первые и последние символы.
+--- Если маскирование отключено конфигурацией, значение возвращается без изменений.
+---
+--- EN:
+--- Masks a string, keeping only the first and last characters.
+--- If masking is disabled by configuration, the value is returned unchanged.
+---
+--- @param value any Value to mask
+--- @return string masked Masked value
+local function maskValue(value)
+    local maskEnabled = GCConfig.Logging and GCConfig.Logging.maskSensitiveData
+
+    -- RU: Если маскирование выключено, возвращаем строковое представление.
+    -- EN: If masking is disabled, return the string representation.
+    if not maskEnabled then
+        return tostring(value)
+    end
+
+    local valueString = tostring(value)
+
+    -- RU: Слишком короткие значения маскируем полностью.
+    -- EN: Mask very short values entirely.
+    if #valueString <= 8 then
+        return '****'
+    end
+
+    -- RU: Оставляем первые 4 и последние 4 символа.
+    -- EN: Keep the first 4 and last 4 characters.
+    local firstPart = valueString:sub(1, 4)
+    local lastPart = valueString:sub(-4)
+    local middleLength = #valueString - 8
+
+    return firstPart .. string.rep('*', middleLength) .. lastPart
+end
+
+--- RU:
+--- Санитизирует таблицу данных перед логированием.
+--- Рекурсивно обходит вложенные таблицы и маскирует чувствительные ключи.
+---
+--- EN:
+--- Sanitizes a data table before logging.
+--- Recursively walks nested tables and masks sensitive keys.
+---
+--- @param data table Data table to sanitize
+--- @return table sanitized Sanitized copy of the data
+local function sanitizeData(data)
+    local sanitized = {}
+
+    for key, value in pairs(data) do
+        -- RU: Если значение вложенная таблица, обрабатываем её рекурсивно.
+        -- EN: If the value is a nested table, process it recursively.
+        if type(value) == 'table' then
+            sanitized[key] = sanitizeData(value)
+        elseif isSensitiveKey(key) then
+            -- RU: Маскируем чувствительные значения.
+            -- EN: Mask sensitive values.
+            sanitized[key] = maskValue(value)
+        else
+            sanitized[key] = value
+        end
+    end
+
+    return sanitized
+end
+
 --- RU:
 --- Проверяет, разрешён ли уровень логирования конфигурацией.
 ---
@@ -107,7 +204,17 @@ function GCLogger.Log(level, errorCode, message, data)
         return
     end
 
-    local formatted = formatMessage(level, errorCode, message, data)
+    -- RU: Санитизируем данные автоматически, чтобы чувствительные значения
+    -- RU: (license, ip, discord и т.д.) не попадали в лог в открытом виде.
+    -- EN: Sanitize the data automatically so sensitive values
+    -- EN: (license, ip, discord, etc.) never reach the log in plain text.
+    local safeData = data
+
+    if type(data) == 'table' then
+        safeData = sanitizeData(data)
+    end
+
+    local formatted = formatMessage(level, errorCode, message, safeData)
 
     -- RU: Выводим в консоль.
     -- EN: Print to console.

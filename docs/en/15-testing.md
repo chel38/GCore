@@ -37,6 +37,9 @@ end
 | `sessions_test.lua` | Sessions |
 | `connection_test.lua` | Identifiers |
 | `spawn_test.lua` | Spawn |
+| `protocol_test.lua` | Client/server protocol compatibility |
+| `ped_provider_test.lua` | Ped selection provider |
+| `logger_test.lua` | Sensitive-data masking in logs |
 | `rate_limit_test.lua` | Rate limit |
 | `notifications_test.lua` | Notifications |
 | `run.lua` | Entry point for running tests |
@@ -56,24 +59,22 @@ end
 - Decision ID validation.
 - Decision expiry.
 - Duplicate confirmation.
+- String source normalization used by FiveM events.
+- Protocol compatibility.
+- Ped provider validation and selection.
+- Sensitive-data masking in logs.
 
 ## Running tests
 
-Tests run automatically when `gc_core` starts, if development mode
-is enabled in `config/general.lua`:
+Tests are disabled by default. Enable them explicitly in `config/general.lua`:
 
 ```lua
-GCConfig.General.developmentMode = true
+GCConfig.Tests.enabled = true
 ```
 
-In this case the `tests/run.lua` file calls `GCTest.Run()` automatically.
-In production (`developmentMode = false`) the tests are skipped.
-
-You can also run the tests manually through the server console:
-
-```lua
-GCTest.Run()
-```
+Alternatively, add `set gc_runTests 1` to `server.cfg`. In either case,
+`tests/run.lua` calls `GCTest.Run()` when the resource starts. Keep both settings
+disabled in production.
 
 Test files are loaded in `fxmanifest.lua` in the `server_scripts` block
 after the main server logic.

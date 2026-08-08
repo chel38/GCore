@@ -34,7 +34,9 @@ GCLocales.en = {
     ['state.client_ready'] = 'Client is ready',
     ['state.spawn_pending'] = 'Spawn is being prepared',
     ['state.spawning'] = 'Spawn is in progress',
+    ['state.spawn_confirming'] = 'Spawn is being confirmed',
     ['state.spawned'] = 'Player has spawned',
+    ['state.resyncing'] = 'Player is resynchronizing',
     ['state.disconnecting'] = 'Player is disconnecting',
     ['state.disconnected'] = 'Player disconnected',
     ['state.rejected'] = 'Connection rejected',
@@ -49,6 +51,10 @@ GCLocales.en = {
     ['error.session_not_found'] = 'Player session was not found.',
     ['error.spawn_denied'] = 'Player spawn is denied.',
     ['error.not_ready'] = 'Player is not ready yet.',
+
+    -- RU: Сообщения протокола.
+    -- EN: Protocol messages.
+    ['protocol.mismatch'] = 'The client protocol version is incompatible with the server.',
 
     -- RU: Сообщения игрока.
     -- EN: Player messages.

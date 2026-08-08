@@ -1,65 +1,45 @@
 # Player States / Состояния игрока
 
-## Level 1. In simple words
+## Overview
 
-A state is the stage a player is at.
-GreenCore ensures the player passes stages in the correct order.
+Every player session has a server-controlled state. `GCStates.Set` validates
+each transition and returns `success, errorCode`; callers must handle failures.
 
-## Level 2. Technical explanation
+## States
 
-Each state is stored in the player session.
-Transitions between states are validated by the server.
+| State | Purpose |
+| ----- | ------- |
+| `connecting` | The connection is being validated |
+| `validated` | Validation completed |
+| `joining` | FiveM is finalizing the join |
+| `client_ready` | Client protocol readiness is confirmed |
+| `spawn_pending` | The server is preparing a spawn |
+| `spawning` | The client spawn is in progress |
+| `spawn_confirming` | The server is waiting for spawn confirmation |
+| `spawned` | The player has spawned |
+| `resyncing` | A session is resynchronizing after resource restart |
+| `disconnecting` | Disconnect cleanup is in progress |
+| `disconnected` | Disconnect cleanup completed |
+| `rejected` | The connection was rejected |
+| `error` | A terminal operation failed |
 
-## State table
-
-| State           | RU                     | EN                      |
-| --------------- | ---------------------- | ----------------------- |
-| `connecting`    | Игрок подключается     | Player is connecting    |
-| `validated`     | Проверка завершена     | Validation completed    |
-| `joining`       | Игрок входит           | Player is joining       |
-| `client_ready`  | Клиент готов           | Client is ready         |
-| `spawn_pending` | Спавн подготавливается | Spawn is being prepared |
-| `spawning`      | Выполняется спавн      | Spawn is in progress    |
-| `spawned`       | Игрок появился         | Player has spawned      |
-| `disconnecting` | Игрок отключается      | Player is disconnecting |
-| `disconnected`  | Игрок отключён         | Player disconnected     |
-| `rejected`      | Подключение отклонено  | Connection rejected     |
-| `error`         | Произошла ошибка       | An error occurred       |
-
-## Allowed transitions
+## Main lifecycle
 
 ```text
-connecting → validated
-validated → joining
-joining → client_ready
-client_ready → spawn_pending
-spawn_pending → spawning
-spawning → spawned
-spawned → disconnecting
-disconnecting → disconnected
+connecting → validated → joining → client_ready → spawn_pending
+           → spawning → spawn_confirming → spawned
 ```
 
-## Additional transitions
+Recovered sessions use one of these transitions:
 
 ```text
-connecting → rejected
-validated → rejected
-joining → error
-client_ready → error
-spawn_pending → error
-spawning → error
-error → disconnecting
+resyncing → spawned
+resyncing → spawn_pending
 ```
 
-## Forbidden transitions
-
-```text
-connecting → spawned
-validated → spawned
-client_ready → connecting
-spawned → spawn_pending
-disconnected → spawned
-```
+Every active state can transition to `disconnecting`, followed by
+`disconnecting → disconnected`. Error transitions are allowed from `joining`,
+`client_ready`, all spawn states, and `resyncing`.
 
 ## Diagram
 
@@ -67,40 +47,30 @@ disconnected → spawned
 stateDiagram-v2
     [*] --> connecting
     connecting --> validated
+    connecting --> rejected
     validated --> joining
     joining --> client_ready
     client_ready --> spawn_pending
     spawn_pending --> spawning
-    spawning --> spawned
+    spawning --> spawn_confirming
+    spawn_confirming --> spawned
+    resyncing --> spawned
+    resyncing --> spawn_pending
     spawned --> disconnecting
     disconnecting --> disconnected
-    connecting --> rejected
     spawning --> error
 ```
 
-## State service methods
+## State service
 
 | Method | Purpose |
 | ------ | ------- |
 | `GCStates.CanTransition` | Checks whether a transition is allowed |
-| `GCStates.Set` | Sets a new state |
+| `GCStates.Set` | Applies a validated transition |
 | `GCStates.Get` | Returns the current state |
-| `GCStates.Is` | Checks whether a player is in a state |
-| `GCStates.GetAllowedTransitions` | Returns allowed transitions |
-
-## Level 3. Lua code example
-
-```lua
-local success, errorCode = GCStates.Set(
-    playerSource,
-    'client_ready',
-    'client_reported_ready'
-)
-
-if not success then
-    print('State transition failed: ' .. tostring(errorCode))
-end
-```
+| `GCStates.Is` | Checks the current state |
+| `GCStates.GetAllowedTransitions` | Returns allowed target states |
+| `GCStates.IsActiveState` | Checks whether a state can still disconnect |
 
 ## Next step
 

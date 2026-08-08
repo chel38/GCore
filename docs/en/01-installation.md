@@ -5,7 +5,7 @@
 - FXServer (current version)
 - Windows or Linux
 - OneSync
-- Lua 5.4 (enabled via `lua54 'yes'`)
+- Lua 5.4 (used by current FXServer builds; the `lua54` manifest directive is no longer required)
 
 ## Step-by-step installation
 

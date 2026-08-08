@@ -12,7 +12,8 @@ Future modules are separate FiveM resources.
 ## Modularity rules
 
 1. Each module is a separate FiveM resource.
-2. Each module's game logic is written only in Lua; the NUI part uses TypeScript + Tailwind CSS.
+2. Each module's game logic is written only in Lua. NUI, when added, will be written
+   with TypeScript + Tailwind CSS (C# is not used).
 3. Modules do not read each other's internal files.
 4. Modules do not modify each other's internal tables.
 5. Modules do not use shared global variables.

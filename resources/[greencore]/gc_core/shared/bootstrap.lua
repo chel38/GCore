@@ -54,6 +54,8 @@ if IsDuplicityVersion then
     GCSpawn = GCSpawn or {}
     GCRateLimit = GCRateLimit or {}
     GCSecurity = GCSecurity or {}
+    GCPedProvider = GCPedProvider or {}
+    GCSpawnLocationProvider = GCSpawnLocationProvider or {}
 end
 
 -- RU: Клиентские сервисы (доступны только на клиенте).

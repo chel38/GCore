@@ -37,11 +37,14 @@ The client can only:
 | --------- | ---------- |
 | Server    | Lua 5.4    |
 | Client    | Lua 5.4    |
-| NUI (interfaces, HUD) | TypeScript + Tailwind CSS |
 | Configuration | Lua 5.4 |
 | Localization | Lua 5.4 |
 | Tests     | Lua 5.4    |
 | Documentation | Markdown, Mermaid |
+| NUI (will be added later) | TypeScript + Tailwind CSS |
+
+> **When NUI is added, it will be written with TypeScript + Tailwind CSS**
+> **and other modern FiveM technologies. C# will not be used.**
 
 ## What is NOT included in the first version
 

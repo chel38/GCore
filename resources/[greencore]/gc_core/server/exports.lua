@@ -33,7 +33,9 @@ exports('IsPlayerReady', function(playerSource)
     return GCStates.Is(playerSource, 'client_ready')
         or GCStates.Is(playerSource, 'spawn_pending')
         or GCStates.Is(playerSource, 'spawning')
+        or GCStates.Is(playerSource, 'spawn_confirming')
         or GCStates.Is(playerSource, 'spawned')
+        or GCStates.Is(playerSource, 'resyncing')
 end)
 
 -- RU: Проверяет, появился ли игрок.
@@ -56,14 +58,18 @@ exports('GetPlayerState', function(playerSource)
     return GCStates.Get(playerSource)
 end)
 
--- RU: Возвращает безопасную копию сессии игрока.
--- EN: Returns a safe copy of a player session.
+-- RU: Возвращает безопасный публичный DTO сессии игрока.
+-- RU: НЕ раскрывает внутренние identifiers, spawn decision, security или
+-- RU: rate-limit данные.
+-- EN: Returns a safe public DTO of a player session.
+-- EN: Does NOT expose internal identifiers, spawn decision, security, or
+-- EN: rate-limit data.
 exports('GetPlayerSession', function(playerSource)
     if type(playerSource) ~= 'number' then
         return nil
     end
 
-    return GCSessions.Clone(playerSource)
+    return GCSessions.GetPublicDTO(playerSource)
 end)
 
 -- RU: Возвращает идентификатор игрока по типу.

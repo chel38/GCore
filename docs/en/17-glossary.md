@@ -45,13 +45,10 @@ The client only performs allowed actions.
 The client can only request an action.
 The server decides whether to allow it.
 
-### Lua only for logic
+### Core runtime in Lua; NUI — TypeScript + Tailwind
 
-All game logic code (server and client) is written in Lua 5.4.
-No C#, Python, Node.js.
-
-### NUI — TypeScript + Tailwind
-
-The client-side NUI (interfaces, HUD, windows) is written with TypeScript + Tailwind CSS.
-TypeScript is compiled to JavaScript and shipped as a static resource;
-JavaScript is not written by hand.
+The `gc_core` runtime (server, client, shared, config, locales, tests) is written in Lua 5.4.
+Further development and adding NUI will use TypeScript + Tailwind CSS
+and other modern FiveM-supported technologies.
+C# will not be used.
+NUI is not used in `gc_core` at this stage.

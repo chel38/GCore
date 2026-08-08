@@ -37,11 +37,14 @@ Server is the source of truth.
 | --------- | ---------- |
 | Сервер    | Lua 5.4    |
 | Клиент    | Lua 5.4    |
-| NUI (интерфейсы, HUD) | TypeScript + Tailwind CSS |
 | Конфигурация | Lua 5.4 |
 | Локализация | Lua 5.4 |
 | Тесты     | Lua 5.4    |
 | Документация | Markdown, Mermaid |
+| NUI (будет добавлен позже) | TypeScript + Tailwind CSS |
+
+> **NUI, когда будет добавлен, будет написан на TypeScript + Tailwind CSS**
+> **и других современных технологиях FiveM. C# не будет использоваться.**
 
 ## Что НЕ входит в первую версию
 

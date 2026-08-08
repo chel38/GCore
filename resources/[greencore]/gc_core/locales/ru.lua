@@ -34,7 +34,9 @@ GCLocales.ru = {
     ['state.client_ready'] = 'Клиент готов',
     ['state.spawn_pending'] = 'Спавн подготавливается',
     ['state.spawning'] = 'Выполняется спавн',
+    ['state.spawn_confirming'] = 'Спавн подтверждается',
     ['state.spawned'] = 'Игрок появился',
+    ['state.resyncing'] = 'Игрок синхронизируется',
     ['state.disconnecting'] = 'Игрок отключается',
     ['state.disconnected'] = 'Игрок отключён',
     ['state.rejected'] = 'Подключение отклонено',
@@ -49,6 +51,10 @@ GCLocales.ru = {
     ['error.session_not_found'] = 'Сессия игрока не найдена.',
     ['error.spawn_denied'] = 'Появление игрока запрещено.',
     ['error.not_ready'] = 'Игрок ещё не готов.',
+
+    -- RU: Сообщения протокола.
+    -- EN: Protocol messages.
+    ['protocol.mismatch'] = 'Версия протокола клиента несовместима с текущей версией сервера.',
 
     -- RU: Сообщения игрока.
     -- EN: Player messages.

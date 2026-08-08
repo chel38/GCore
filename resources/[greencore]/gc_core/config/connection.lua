@@ -24,6 +24,12 @@ GCConfig.Connection = {
     -- EN: Maximum deferral wait time in milliseconds.
     deferralTimeoutMs = 15000,
 
+    -- RU: Максимальное время жизни pending connection в миллисекундах.
+    -- RU: Если за это время не произошёл playerJoining, pending connection удаляется.
+    -- EN: Maximum lifetime of a pending connection in milliseconds.
+    -- EN: If playerJoining does not occur within this time, the pending connection is removed.
+    pendingConnectionLifetimeMs = 60000,
+
     -- RU: Максимальное время ожидания готовности клиента в миллисекундах.
     -- EN: Maximum client readiness wait time in milliseconds.
     clientReadyTimeoutMs = 30000

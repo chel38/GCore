@@ -2,10 +2,12 @@
 
 [Русский](README.ru.md) | [English](README.en.md)
 
-> **GreenCore использует Lua 5.4 для всей серверной и клиентской логики.**
-> **GreenCore uses Lua 5.4 for all server-side and client-side logic.**
-
-**Логика — только Lua. NUI — TypeScript + Tailwind. / Lua for logic. TypeScript + Tailwind for NUI.**
+> **GreenCore runtime полностью написан на Lua.**
+> **GreenCore runtime is 100% Lua.**
+>
+> Сервер, клиент, shared, config, locales и tests `gc_core` — всё на Lua.
+> Дальнейшая разработка и добавление **NUI** будут использовать **TypeScript + Tailwind CSS**
+> и другие современные технологии, поддерживаемые FiveM. **C# использоваться не будет.**
 
 ---
 
@@ -43,13 +45,20 @@ GreenCore — это минимальный модульный движок дл
 - Базу данных
 - Деньги, инвентарь, транспорт
 - Чат, HUD, админ-панель
+- NUI (будет добавлен позже) / NUI (will be added later)
+- C# (не планируется) / C# (not planned)
+
+> **NUI, когда будет добавлен, будет написан на TypeScript + Tailwind CSS**
+> **и других современных технологиях FiveM. C# не будет использоваться.**
+> **When NUI is added, it will be written with TypeScript + Tailwind CSS**
+> **and other modern FiveM technologies. C# will not be used.**
 
 ## Требования
 
 - FXServer (актуальная версия)
 - Windows или Linux
 - OneSync
-- Lua 5.4 (включён через `lua54 'yes'`)
+- Lua 5.4 (runtime полностью на Lua / runtime is entirely Lua)
 
 ## Установка
 

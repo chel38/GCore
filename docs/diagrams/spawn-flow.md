@@ -74,3 +74,4 @@ gc_core Client Lua
 gc_core Server Lua
     ↓  Проверка решения / Decision validation
     ↓  Игрок появился / Player spawned
+```

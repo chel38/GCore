@@ -9,35 +9,78 @@ GreenCore следит, чтобы игрок проходил этапы в п�
 
 Каждое состояние хранится в сессии игрока.
 Переходы между состояниями проверяются сервером.
+Все вызовы `GCStates.Set` возвращают `success, errorCode`, которые вызывающие
+стороны обязаны проверять.
 
 ## Таблица состояний
 
-| Состояние       | RU                     | EN                      |
-| --------------- | ---------------------- | ----------------------- |
-| `connecting`    | Игрок подключается     | Player is connecting    |
-| `validated`     | Проверка завершена     | Validation completed    |
-| `joining`       | Игрок входит           | Player is joining       |
-| `client_ready`  | Клиент готов           | Client is ready         |
-| `spawn_pending` | Спавн подготавливается | Spawn is being prepared |
-| `spawning`      | Выполняется спавн      | Spawn is in progress    |
-| `spawned`       | Игрок появился         | Player has spawned      |
-| `disconnecting` | Игрок отключается      | Player is disconnecting |
-| `disconnected`  | Игрок отключён         | Player disconnected     |
-| `rejected`      | Подключение отклонено  | Connection rejected     |
-| `error`         | Произошла ошибка       | An error occurred       |
+| Состояние          | RU                          | EN                             |
+| ------------------ | --------------------------- | ------------------------------ |
+| `connecting`       | Игрок подключается          | Player is connecting           |
+| `validated`        | Проверка завершена          | Validation completed           |
+| `joining`          | Игрок входит                | Player is joining              |
+| `client_ready`     | Клиент готов                | Client is ready                |
+| `spawn_pending`    | Спавн подготавливается      | Spawn is being prepared        |
+| `spawning`         | Выполняется спавн           | Spawn is in progress           |
+| `spawn_confirming` | Спавн подтверждается        | Spawn is being confirmed       |
+| `spawned`          | Игрок появился              | Player has spawned             |
+| `resyncing`        | Игрок синхронизируется      | Player is resynchronizing      |
+| `disconnecting`    | Игрок отключается           | Player is disconnecting        |
+| `disconnected`     | Игрок отключён              | Player disconnected            |
+| `rejected`         | Подключение отклонено       | Connection rejected            |
+| `error`            | Произошла ошибка            | An error occurred              |
 
-## Разрешённые переходы
+## Основной lifecycle
 
 ```text
-connecting → validated
-validated → joining
-joining → client_ready
-client_ready → spawn_pending
-spawn_pending → spawning
-spawning → spawned
+connecting
+   ↓
+validated
+   ↓
+joining
+   ↓
+client_ready
+   ↓
+spawn_pending
+   ↓
+spawning
+   ↓
+spawn_confirming
+   ↓
+spawned
+```
+
+## Recovery после рестарта
+
+```text
+resyncing → spawned          (игрок уже в мире)
+resyncing → spawn_pending    (нужен повторный спавн)
+```
+
+## Отключение из любого состояния
+
+Игрок способен отключиться из **любого активного** состояния:
+
+```text
+connecting → disconnecting
+validated → disconnecting
+joining → disconnecting
+client_ready → disconnecting
+spawn_pending → disconnecting
+spawning → disconnecting
+spawn_confirming → disconnecting
 spawned → disconnecting
+resyncing → disconnecting
+error → disconnecting
+```
+
+Затем:
+
+```text
 disconnecting → disconnected
 ```
+
+Нельзя предполагать, что игрок отключается только после успешного спавна.
 
 ## Дополнительные переходы
 
@@ -48,7 +91,8 @@ joining → error
 client_ready → error
 spawn_pending → error
 spawning → error
-error → disconnecting
+spawn_confirming → error
+resyncing → error
 ```
 
 ## Запрещённые переходы
@@ -58,6 +102,7 @@ connecting → spawned
 validated → spawned
 client_ready → connecting
 spawned → spawn_pending
+spawned → spawn_confirming
 disconnected → spawned
 ```
 
@@ -71,9 +116,12 @@ stateDiagram-v2
     joining --> client_ready
     client_ready --> spawn_pending
     spawn_pending --> spawning
-    spawning --> spawned
+    spawning --> spawn_confirming
+    spawn_confirming --> spawned
     spawned --> disconnecting
     disconnecting --> disconnected
+    resyncing --> spawned
+    resyncing --> spawn_pending
     connecting --> rejected
     spawning --> error
 ```
@@ -87,6 +135,7 @@ stateDiagram-v2
 | `GCStates.Get` | Возвращает текущее состояние |
 | `GCStates.Is` | Проверяет, находится ли игрок в состоянии |
 | `GCStates.GetAllowedTransitions` | Возвращает разрешённые переходы |
+| `GCStates.IsActiveState` | Проверяет, является ли состояние активным |
 
 ## Уровень 3. Пример Lua-кода
 
@@ -98,9 +147,15 @@ local success, errorCode = GCStates.Set(
 )
 
 if not success then
-    print('State transition failed: ' .. tostring(errorCode))
+    GCLogger.Warn('GC-STATE-100', 'State transition failed', {
+        source = playerSource,
+        errorCode = errorCode
+    })
 end
 ```
+
+Все критические переходы должны проверять результат, чтобы удаление игрока
+никогда не оставляло зависшую Lua-сессию.
 
 ## Следующий шаг
 

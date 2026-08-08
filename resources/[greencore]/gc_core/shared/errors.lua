@@ -207,6 +207,110 @@ GCErrors = {
         localeKey = 'error.session_not_found',
         severity = 'warn',
         public = false
+    },
+
+    -- RU: Ошибки deferrals (playerConnecting).
+    -- EN: Deferral errors (playerConnecting).
+    ['GC-CONNECTION-DEFERRAL-001'] = {
+        localeKey = 'connection.rejected',
+        severity = 'error',
+        public = true
+    },
+
+    -- RU: Ошибки pending connection.
+    -- EN: Pending connection errors.
+    ['GC-CONNECTION-PENDING-001'] = {
+        localeKey = 'connection.rejected',
+        severity = 'error',
+        public = true
+    },
+    ['GC-CONNECTION-PENDING-002'] = {
+        localeKey = 'connection.timeout',
+        severity = 'warn',
+        public = false
+    },
+
+    -- RU: Ошибки playerJoining / миграции source.
+    -- EN: playerJoining / source migration errors.
+    ['GC-JOIN-001'] = {
+        localeKey = 'error.internal',
+        severity = 'error',
+        public = false
+    },
+    ['GC-JOIN-002'] = {
+        localeKey = 'error.internal',
+        severity = 'error',
+        public = false
+    },
+
+    -- RU: Несовместимая версия протокола.
+    -- EN: Incompatible protocol version.
+    ['GC-PROTOCOL-MISMATCH-001'] = {
+        localeKey = 'protocol.mismatch',
+        severity = 'error',
+        public = true
+    },
+
+    -- RU: Ошибки конфигурации random ped.
+    -- EN: Random ped configuration errors.
+    ['GC-SPAWN-PED-CONFIG-001'] = {
+        localeKey = 'spawn.failed',
+        severity = 'warn',
+        public = false
+    },
+    ['GC-SPAWN-PED-INVALID-001'] = {
+        localeKey = 'spawn.failed',
+        severity = 'warn',
+        public = false
+    },
+    ['GC-SPAWN-PED-LOAD-001'] = {
+        localeKey = 'spawn.failed',
+        severity = 'error',
+        public = false
+    },
+    ['GC-SPAWN-PED-TIMEOUT-001'] = {
+        localeKey = 'spawn.failed',
+        severity = 'error',
+        public = false
+    },
+
+    -- RU: Ошибки коллизии при спавне.
+    -- EN: Spawn collision errors.
+    ['GC-SPAWN-COLLISION-001'] = {
+        localeKey = 'spawn.failed',
+        severity = 'error',
+        public = false
+    },
+
+    -- RU: Ошибки решения о спавне.
+    -- EN: Spawn decision errors.
+    ['GC-SPAWN-DECISION-001'] = {
+        localeKey = 'spawn.rejected',
+        severity = 'error',
+        public = true
+    },
+    ['GC-SPAWN-DECISION-EXPIRED-001'] = {
+        localeKey = 'spawn.expired',
+        severity = 'error',
+        public = true
+    },
+    ['GC-SPAWN-DECISION-CONSUMED-001'] = {
+        localeKey = 'spawn.rejected',
+        severity = 'error',
+        public = false
+    },
+
+    -- RU: Ошибки resync после рестарта.
+    -- EN: Resync-after-restart errors.
+    ['GC-RESYNC-001'] = {
+        localeKey = 'error.internal',
+        severity = 'error',
+        public = false
+    },
+    ['GC-RESYNC-002'] = {
+        localeKey = 'error.internal',
+        severity = 'error',
+        public = false
     }
 }
 
