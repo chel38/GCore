@@ -16,6 +16,17 @@ $manifestPath = Join-Path $resourceRoot 'fxmanifest.lua'
 $manifest = Get-Content -LiteralPath $manifestPath -Raw
 $versionSource = Get-Content -LiteralPath (Join-Path $resourceRoot 'shared/version.lua') -Raw
 
+$manifestLuaPaths = [regex]::Matches($manifest, '[''"](?<path>[^''"]+\.lua)[''"]') |
+    ForEach-Object { $_.Groups['path'].Value } |
+    Where-Object { $_ -notmatch '[*?]' } |
+    Sort-Object -Unique
+
+foreach ($relativePath in $manifestLuaPaths) {
+    if (-not (Test-Path -LiteralPath (Join-Path $resourceRoot $relativePath))) {
+        Add-Failure "fxmanifest.lua references a missing file: $relativePath"
+    }
+}
+
 if ($manifest -notmatch "version\s+'0\.1\.2-alpha'") {
     Add-Failure 'fxmanifest.lua release version is not 0.1.2-alpha.'
 }

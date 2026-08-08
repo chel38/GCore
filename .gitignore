@@ -26,7 +26,7 @@ test-results/
 
 # RU: Локальные настройки FiveM (не должны попадать в репозиторий).
 # EN: Local FiveM settings (must not enter the repository).
-server/
-server-data/
-txData/
+/server/
+/server-data/
+/txData/
 .codex-review-runtime/
