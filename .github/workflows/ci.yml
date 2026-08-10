@@ -62,8 +62,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: resources/[greencore]/gc_identity/web/pnpm-lock.yaml
 
       - name: Install exact NUI dependencies
         run: pnpm install --frozen-lockfile
