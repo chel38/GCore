@@ -22,6 +22,8 @@ CI runs:
 
 ```text
 lua tools/test_harness.lua .
+lua tools/module_test_harness.lua . gc_example
+lua tools/module_test_harness.lua . gc_identity
 pwsh tools/validate-repository.ps1
 ```
 
@@ -39,6 +41,10 @@ The workflow also compiles every Lua file (translating only CfxLua backtick hash
 in temporary copies), derives version/API/protocol from `shared/version.lua`,
 checks manifest/CHANGELOG/README/tag consistency and Markdown links, and rejects
 raw runtime detection, event literals, or direct state mutation.
+
+For every independent `gc_*` resource it also checks module metadata, the
+`gc_core` dependency, RU/EN README files, a test entry point, unknown core
+exports, and forbidden access to private core symbols or paths.
 
 The standalone harness is not a substitute for a real client. Release gating must
 report `REAL FXSERVER TEST: NOT RUN` unless the documented connect/spawn/restart/

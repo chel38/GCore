@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $resourceRoot = Join-Path $repoRoot 'resources/[greencore]/gc_core'
+$modulesRoot = Join-Path $repoRoot 'resources/[greencore]'
 $failures = [System.Collections.Generic.List[string]]::new()
 
 function Add-Failure([string]$message) {
@@ -181,6 +182,79 @@ foreach ($method in $exportedMethods) {
     }
 }
 
+$moduleDirectories = Get-ChildItem -LiteralPath $modulesRoot -Directory |
+    Where-Object { $_.Name -like 'gc_*' -and $_.Name -ne 'gc_core' } |
+    Sort-Object Name
+
+foreach ($module in $moduleDirectories) {
+    $moduleName = $module.Name
+    $moduleManifestPath = Join-Path $module.FullName 'fxmanifest.lua'
+
+    if (-not (Test-Path -LiteralPath $moduleManifestPath)) {
+        Add-Failure "Module $moduleName has no fxmanifest.lua."
+        continue
+    }
+
+    $moduleManifest = Get-Content -LiteralPath $moduleManifestPath -Raw
+    $declaredName = [regex]::Match(
+        $moduleManifest,
+        '(?m)^\s*name\s+[''"](?<value>[^''"]+)[''"]'
+    )
+
+    if (-not $declaredName.Success -or $declaredName.Groups['value'].Value -ne $moduleName) {
+        Add-Failure "Module $moduleName manifest name does not match its directory."
+    }
+
+    foreach ($metadataField in @('author', 'description', 'version')) {
+        $metadataPattern = '(?m)^\s*{0}\s+[''"][^''"]+[''"]' -f [regex]::Escape($metadataField)
+
+        if ($moduleManifest -notmatch $metadataPattern) {
+            Add-Failure "Module $moduleName manifest is missing $metadataField metadata."
+        }
+    }
+
+    if ($moduleManifest -notmatch '(?m)^\s*dependency\s+[''"]gc_core[''"]') {
+        Add-Failure "Module $moduleName does not declare dependency 'gc_core'."
+    }
+
+    foreach ($requiredPath in @('README.md', 'README.ru.md', 'tests/run.lua')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $module.FullName $requiredPath))) {
+            Add-Failure "Module $moduleName is missing $requiredPath."
+        }
+    }
+
+    $moduleLuaFiles = Get-ChildItem -LiteralPath $module.FullName -Recurse -Filter '*.lua'
+
+    foreach ($moduleLuaFile in $moduleLuaFiles) {
+        $relativeModuleFile = [IO.Path]::GetRelativePath(
+            $module.FullName,
+            $moduleLuaFile.FullName
+        ).Replace('\', '/')
+        $moduleSource = Get-Content -LiteralPath $moduleLuaFile.FullName -Raw
+
+        if ($moduleSource -match '\b(?:GCSessions|GCStates|GCSpawn|GCPlayers)\b') {
+            Add-Failure "Module $moduleName references gc_core internals: $relativeModuleFile"
+        }
+
+        if ($moduleSource -match '(?i)(?:\.\.[\\/]+gc_core|@gc_core[\\/]|gc_core[\\/]server)') {
+            Add-Failure "Module $moduleName imports a private gc_core path: $relativeModuleFile"
+        }
+
+        $coreCalls = [regex]::Matches(
+            $moduleSource,
+            'exports(?:\[[''"]gc_core[''"]\]|\.gc_core)\s*:\s*(?<name>[A-Za-z0-9_]+)\s*\('
+        )
+
+        foreach ($coreCall in $coreCalls) {
+            $calledMethod = $coreCall.Groups['name'].Value
+
+            if ($calledMethod -notin $exportedMethods) {
+                Add-Failure "Module $moduleName calls unknown gc_core export $calledMethod in $relativeModuleFile."
+            }
+        }
+    }
+}
+
 $clientEventsSource = Get-Content -LiteralPath (Join-Path $resourceRoot 'client/events.lua') -Raw
 
 if ($clientEventsSource -match '\bRegisterNetEvent\s*\(') {
@@ -239,7 +313,7 @@ if ($failures.Count -gt 0) {
     exit 1
 }
 
-Write-Host "Repository validation passed ($($coreLuaFiles.Count) Lua files, $($markdownFiles.Count) Markdown files)."
+Write-Host "Repository validation passed ($($coreLuaFiles.Count) core Lua files, $($moduleDirectories.Count) modules, $($markdownFiles.Count) Markdown files)."
 
 # EN: `git describe --exact-match` is expected to return 1 for ordinary,
 # untagged commits. Do not leak that probe status as the validator result.

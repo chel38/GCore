@@ -30,3 +30,12 @@ jobs:
 
       - name: Run unit, integration, security, and runtime tests
         run: lua tools/test_harness.lua .
+
+      - name: Run independent module test suites
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r module_path; do
+            module_name="$(basename "$module_path")"
+            lua tools/module_test_harness.lua . "$module_name"
+          done < <(find 'resources/[greencore]' -mindepth 1 -maxdepth 1 -type d -name 'gc_*' ! -name 'gc_core' | sort)

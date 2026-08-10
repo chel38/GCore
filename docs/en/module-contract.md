@@ -82,6 +82,18 @@ the restart. Handle the core as unavailable, re-check API v1 after it starts, an
 query fresh state/DTO before accepting gameplay. Do not implement your own recovery
 handshake or assume `forceResync` timing.
 
+FiveM stops resources that declare `dependency 'gc_core'` when the dependency is
+restarted. The maintenance sequence is therefore explicit and ordered:
+
+```text
+restart gc_core
+ensure gc_identity   # and every other stopped dependent module
+```
+
+On a normal server boot, the corresponding `ensure` lines provide the same order.
+Each dependent module must rebuild its own runtime state idempotently when it is
+ensured again; it must not assume FiveM automatically restarts dependants.
+
 No public server lifecycle hook is promised in API v1. Modules should check the
 public state at the moment an operation is requested.
 

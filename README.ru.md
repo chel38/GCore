@@ -32,6 +32,8 @@ Network Protocol Version: `1`
 
 Core API Status: **Stable for module development**
 
+Модульная экосистема: `gc_example 0.1.0-alpha`, `gc_identity 0.1.0-alpha`.
+
 ## Возможности версии
 
 - Проверка подключения через deferrals
@@ -46,13 +48,15 @@ Core API Status: **Stable for module development**
 - Публичный API v1
 - Локализация RU|EN
 - Диагностический режим
+- Reference module только на Public API
+- Независимый MVP identity и персонажей
 
 ## Ограничения версии
 
 Первая версия **не** включает:
 
-- Регистрацию, аккаунты, персонажей
-- Базу данных
+- Identity внутри `gc_core` (за неё отвечает отдельный `gc_identity`)
+- Production database/ORM (`gc_identity` MVP использует private JSON adapter)
 - Деньги, инвентарь, транспорт
 - Чат, HUD, админ-панель
 - NUI (будет добавлен позже) / NUI (will be added later)
@@ -74,12 +78,14 @@ Core API Status: **Stable for module development**
 
 1. Откройте папку ресурсов FiveM-сервера.
 2. Создайте папку `[greencore]`.
-3. Поместите `gc_core` в эту папку.
+3. Поместите нужные `gc_*` resources в эту папку.
 4. Откройте `server.cfg`.
 5. Добавьте:
 
 ```cfg
 ensure gc_core
+ensure gc_example
+ensure gc_identity
 ```
 
 6. Сохраните `server.cfg`.
@@ -97,14 +103,10 @@ ensure gc_core
 ## Структура
 
 ```text
-resources/[greencore]/gc_core/
-├── fxmanifest.lua
-├── config/       # Lua-конфигурация
-├── locales/      # Lua-локализация
-├── shared/       # Общий код
-├── server/       # Серверная логика
-├── client/       # Клиентская логика
-└── tests/        # Lua-тесты
+resources/[greencore]/
+├── gc_core/      # фундамент lifecycle
+├── gc_example/   # reference Public API
+└── gc_identity/  # domain аккаунта и персонажа
 ```
 
 ## API
@@ -136,6 +138,9 @@ resources/[greencore]/gc_core/
 - [Runtime и txAdmin](docs/ru/18-runtime-txadmin.md)
 - [Миграция 0.1.1 → 0.1.2](docs/ru/migration/0.1.1-to-0.1.2.md)
 - [Контракт модулей v1](docs/ru/module-contract.md)
+- [Граф зависимостей модулей](docs/ru/module-dependencies.md)
+- [Проектирование gc_identity](docs/ru/modules/gc_identity/design.md)
+- [Отчёт первого модульного этапа](docs/ru/module-ecosystem-report.md)
 - [Политика совместимости API](docs/ru/20-api-compatibility.md)
 
 ## Тестирование
@@ -144,6 +149,13 @@ resources/[greencore]/gc_core/
 
 ```text
 resources/[greencore]/gc_core/tests/
+```
+
+Автономные тесты модулей:
+
+```text
+lua tools/module_test_harness.lua . gc_example
+lua tools/module_test_harness.lua . gc_identity
 ```
 
 ## Безопасность

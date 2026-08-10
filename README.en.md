@@ -32,6 +32,8 @@ Network Protocol Version: `1`
 
 Core API Status: **Stable for module development**
 
+Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.1.0-alpha`.
+
 ## Version features
 
 - Connection validation via deferrals
@@ -46,13 +48,15 @@ Core API Status: **Stable for module development**
 - Public API v1
 - RU|EN localization
 - Diagnostics mode
+- Public-API-only reference module
+- Independent identity and character MVP
 
 ## Version limitations
 
 The first version does **not** include:
 
-- Registration, accounts, characters
-- Database
+- Identity inside `gc_core` (the independent `gc_identity` resource owns it)
+- Production database/ORM (`gc_identity` MVP uses a private JSON adapter)
 - Money, inventory, vehicles
 - Chat, HUD, admin panel
 - NUI (will be added later) / NUI (будет добавлен позже)
@@ -74,12 +78,14 @@ The first version does **not** include:
 
 1. Open your FiveM server resources folder.
 2. Create a `[greencore]` folder.
-3. Place `gc_core` into this folder.
+3. Place the required `gc_*` resources into this folder.
 4. Open `server.cfg`.
 5. Add:
 
 ```cfg
 ensure gc_core
+ensure gc_example
+ensure gc_identity
 ```
 
 6. Save `server.cfg`.
@@ -97,14 +103,10 @@ All configuration is stored in Lua files under `resources/[greencore]/gc_core/co
 ## Structure
 
 ```text
-resources/[greencore]/gc_core/
-├── fxmanifest.lua
-├── config/       # Lua configuration
-├── locales/      # Lua localization
-├── shared/       # Shared code
-├── server/       # Server logic
-├── client/       # Client logic
-└── tests/        # Lua tests
+resources/[greencore]/
+├── gc_core/      # lifecycle foundation
+├── gc_example/   # Public API reference
+└── gc_identity/  # account and character identity domain
 ```
 
 ## API
@@ -136,6 +138,9 @@ Server exports:
 - [Runtime and txAdmin](docs/en/18-runtime-txadmin.md)
 - [Migration 0.1.1 → 0.1.2](docs/en/migration/0.1.1-to-0.1.2.md)
 - [Module Contract v1](docs/en/module-contract.md)
+- [Module dependency graph](docs/en/module-dependencies.md)
+- [gc_identity design](docs/en/modules/gc_identity/design.md)
+- [Module ecosystem stage report](docs/en/module-ecosystem-report.md)
 - [API compatibility policy](docs/en/20-api-compatibility.md)
 
 ## Testing
@@ -144,6 +149,13 @@ All tests are written in Lua and are loaded only after explicit `gc_runTests 1` 
 
 ```text
 resources/[greencore]/gc_core/tests/
+```
+
+Independent module suites:
+
+```text
+lua tools/module_test_harness.lua . gc_example
+lua tools/module_test_harness.lua . gc_identity
 ```
 
 ## Security

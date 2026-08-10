@@ -82,6 +82,18 @@ end
 state/DTO до gameplay. Не создавайте собственный recovery handshake и не
 полагайтесь на timing `forceResync`.
 
+FiveM останавливает resources с `dependency 'gc_core'` при рестарте зависимости.
+Поэтому maintenance sequence должен быть явным и упорядоченным:
+
+```text
+restart gc_core
+ensure gc_identity   # и каждый другой остановленный dependent module
+```
+
+При обычном запуске сервера тот же порядок задают строки `ensure`. После повторного
+`ensure` каждый dependent module обязан идемпотентно восстановить собственное
+runtime state и не полагаться на автоматический рестарт dependants со стороны FiveM.
+
 API v1 пока не обещает public server lifecycle hook. Проверяйте public state в
 момент запроса операции.
 

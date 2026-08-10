@@ -41,6 +41,8 @@ Network Protocol Version: `1`
 
 Core API Status: **Stable for module development**
 
+Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.1.0-alpha`.
+
 ## Возможности версии / Version features
 
 - Проверка подключения через deferrals (корректный lifecycle) / Connection validation via deferrals (correct lifecycle)
@@ -57,13 +59,15 @@ Core API Status: **Stable for module development**
 - Публичный API v1 (безопасный DTO сессии) / Public API v1 (safe session DTO)
 - Локализация RU|EN / RU|EN localization
 - Диагностический режим / Diagnostics mode
+- Reference module, использующий только Public API v1 / Public-API-only reference module
+- Независимый identity/character MVP / Independent identity/character MVP
 
 ## Ограничения версии / Version limitations
 
 Первая версия **не** включает / The first version does **not** include:
 
-- Регистрацию, аккаунты, персонажей / Registration, accounts, characters
-- Базу данных / Database
+- `gc_core` не содержит аккаунты/персонажей; это отдельный `gc_identity` / `gc_core` does not contain identity; `gc_identity` owns it
+- Production database/ORM (identity MVP uses a private JSON adapter)
 - Деньги, инвентарь, транспорт / Money, inventory, vehicles
 - Чат, HUD, админ-панель / Chat, HUD, admin panel
 - NUI в текущей версии (будет добавлен позже) / NUI in the current version (will be added later)
@@ -85,12 +89,14 @@ Core API Status: **Stable for module development**
 
 1. Откройте папку ресурсов FiveM-сервера / Open your FiveM server resources folder.
 2. Создайте папку `[greencore]` / Create a `[greencore]` folder.
-3. Поместите `gc_core` в эту папку / Place `gc_core` into this folder.
+3. Поместите нужные `gc_*` resources в эту папку / Place required `gc_*` resources there.
 4. Откройте `server.cfg` / Open `server.cfg`.
 5. Добавьте / Add:
 
 ```cfg
 ensure gc_core
+ensure gc_example
+ensure gc_identity
 ```
 
 6. Сохраните `server.cfg` / Save `server.cfg`.
@@ -109,22 +115,10 @@ All configuration is stored in Lua files under `resources/[greencore]/gc_core/co
 ## Структура / Structure
 
 ```text
-resources/[greencore]/gc_core/
-├── fxmanifest.lua
-├── config/          # Lua-конфигурация / Lua configuration
-├── locales/         # Lua-локализация / Lua localization
-├── shared/          # Общий код / Shared code
-├── server/          # Серверная логика / Server logic
-│   ├── connection.lua      # Deferrals, pending, playerJoining
-│   ├── sessions.lua        # Сессии, миграция source, DTO
-│   ├── states.lua          # State machine
-│   ├── spawn.lua           # Spawn decision, подтверждение
-│   ├── ped_provider.lua    # Выбор модели PED (случайный)
-│   ├── spawn_location.lua  # Точка спавна
-│   ├── players.lua         # Отключение и recovery
-│   └── ...
-├── client/          # Клиентская логика / Client logic
-└── tests/           # Lua-тесты (запуск по явному включению) / Lua tests
+resources/[greencore]/
+├── gc_core/      # lifecycle foundation / фундамент lifecycle
+├── gc_example/   # Public API reference
+└── gc_identity/  # account and character identity domain
 ```
 
 ## API
@@ -160,6 +154,9 @@ timestamps, lastPed и locale. Внутренние identifiers, spawn decision 
 - [Random PED spawn EN](docs/en/random-ped-spawn.md)
 - [txAdmin и runtime](docs/ru/18-runtime-txadmin.md) / [txAdmin and runtime](docs/en/18-runtime-txadmin.md)
 - [Контракт модулей](docs/ru/module-contract.md) / [Module Contract](docs/en/module-contract.md)
+- [Зависимости модулей](docs/ru/module-dependencies.md) / [Module dependencies](docs/en/module-dependencies.md)
+- [gc_identity design RU](docs/ru/modules/gc_identity/design.md) / [EN](docs/en/modules/gc_identity/design.md)
+- [Отчёт модульного этапа](docs/ru/module-ecosystem-report.md) / [Module stage report](docs/en/module-ecosystem-report.md)
 - [Совместимость API](docs/ru/20-api-compatibility.md) / [API compatibility](docs/en/20-api-compatibility.md)
 - [Миграция 0.1.1 → 0.1.2](docs/ru/migration/0.1.1-to-0.1.2.md) / [Migration](docs/en/migration/0.1.1-to-0.1.2.md)
 
@@ -175,6 +172,13 @@ set gc_runTests 1
 ```
 
 или через конфигурацию `GCConfig.Tests.enabled = true`.
+
+Standalone module suites / Автономные тесты модулей:
+
+```text
+lua tools/module_test_harness.lua . gc_example
+lua tools/module_test_harness.lua . gc_identity
+```
 
 ## Безопасность / Security
 

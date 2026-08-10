@@ -30,3 +30,6 @@ test-results/
 /server-data/
 /txData/
 .codex-review-runtime/
+
+# RU: Приватные runtime-данные identity / EN: Private identity runtime data.
+/resources/\[greencore\]/gc_identity/data/identities.json
