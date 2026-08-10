@@ -27,7 +27,7 @@ FiveM origin guard `source == 65535` before payload validation or side effects.
 | `gc_core:client:connectionAccepted` | internal protocol | `{apiVersion:integer, protocolVersion:integer}` | N/A | server origin; exact local versions | `GC-PROTOCOL-MISMATCH-001` |
 | `gc_core:client:spawnApproved` | internal protocol | decisionId, finite position, allowlisted ped, expiry, attempt | N/A | server origin; exact schema; duplicate execution guard | `GC-PAYLOAD-*` |
 | `gc_core:client:spawnRejected` | internal protocol | `{errorCode:known string, retryable:boolean}` | N/A | server origin; known code | `GC-PAYLOAD-SCHEMA-001` |
-| `gc_core:client:spawnConfirmed` | internal protocol | `{decisionId?:string, state:'spawned'}` | N/A | server origin; state is exact | `GC-PAYLOAD-SCHEMA-001` |
+| `gc_core:client:spawnConfirmed` | internal protocol | `{decisionId?:string, state:'spawned'}` | N/A | server origin; exact state; commits client state and closes the loading screen once | `GC-PAYLOAD-SCHEMA-001` |
 | `gc_core:client:forceResync` | internal recovery prompt | no payload | bounded server attempts | server origin; starts/merges one bounded readiness wait | none |
 | `gc_core:client:notify` | public presentation | `{message:string≤256, type:allowlisted}` | server API validation | server origin; exact schema | `GC-PAYLOAD-SCHEMA-001` |
 

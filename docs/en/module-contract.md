@@ -35,7 +35,7 @@ local function validateCoreApi()
 end
 ```
 
-Require API `1`, not exactly resource `0.1.3-alpha`. Resource and API versions are
+Require API `1`, not exactly resource `0.1.4-alpha`. Resource and API versions are
 separate precisely so compatible patch/minor releases do not stop modules.
 
 ## Allowed

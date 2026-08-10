@@ -28,6 +28,7 @@ sequenceDiagram
         S->>S: spawn_confirming → spawned
         S->>S: Consume decision
         S-->>C: spawnConfirmed
+        C->>C: Commit client spawned state and close Awaiting scripts
     else Snapshot fails
         S->>S: Classify error and apply bounded policy
         S-->>C: spawnRejected(retryable)
@@ -36,6 +37,10 @@ sequenceDiagram
 
 The internal `spawn_confirming` transition happens **before** `spawnApproved` is
 sent, so an immediate client response cannot race an unfinished server state.
+
+The client closes both FiveM loading layers only after this validated,
+server-origin `spawnConfirmed`. The completion is idempotent, so a recovery or
+duplicate confirmation cannot run the loading-screen natives twice.
 
 ## Server verification
 

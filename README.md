@@ -31,9 +31,9 @@ Server picks PED → Spawn → Confirmation → Disconnection
 
 ## Статус разработки / Development status
 
-**0.1.3-alpha** — финальный core-stabilization release / final core-stabilization release.
+**0.1.4-alpha** — исправление client loading lifecycle / client loading lifecycle fix.
 
-Core Resource Version: `0.1.3-alpha`
+Core Resource Version: `0.1.4-alpha`
 
 Core API Version: `1`
 
@@ -104,7 +104,7 @@ ensure gc_identity
 8. Найдите сообщение / Look for the message:
 
 ```text
-[GreenCore] [INFO] gc_core 0.1.3-alpha started successfully (recovered N players)
+[GreenCore] [INFO] gc_core 0.1.4-alpha started successfully (recovered N players)
 ```
 
 ## Конфигурация / Configuration
@@ -130,7 +130,7 @@ resources/[greencore]/
 | `GetApiVersion`          | number         | Версия API                |
 | `GetProtocolVersion`     | number         | Версия протокола          |
 | `GetVersion`             | table          | Версия `gc_core`          |
-| `GetVersionString`       | string         | `0.1.3-alpha`             |
+| `GetVersionString`       | string         | `0.1.4-alpha`             |
 | `IsPlayerConnected`      | boolean        | Проверяет сессию          |
 | `IsPlayerReady`          | boolean        | Проверяет готовность      |
 | `IsPlayerSpawned`        | boolean        | Проверяет спавн           |

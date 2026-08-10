@@ -13,7 +13,7 @@ game 'gta5'
 
 author 'GCore Project'
 description 'GreenCore modular engine core resource'
-version '0.1.3-alpha'
+version '0.1.4-alpha'
 
 -- RU: Подключаем общие файлы, доступные серверу и клиенту.
 -- RU: custom.example.lua НЕ подключается в runtime — он перенесён в examples/locales.
@@ -75,6 +75,7 @@ client_scripts {
     'client/state.lua',
     'client/readiness.lua',
     'client/spawn.lua',
+    'client/loading.lua',
     'client/events.lua',
     'client/diagnostics.lua',
     'client/main.lua'

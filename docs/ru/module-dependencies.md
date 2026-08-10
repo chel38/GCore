@@ -11,7 +11,7 @@ gc_identity ───────→ gc_core Public API v1
 Или как дерево слоёв:
 
 ```text
-gc_core 0.1.3-alpha (API 1)
+gc_core 0.1.4-alpha (API 1)
 ├── gc_example 0.1.0-alpha (reference, без Public API)
 └── gc_identity 0.1.0-alpha (Identity API 1)
 ```

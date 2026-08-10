@@ -22,9 +22,9 @@ Connection → Validation → Session → Client readiness → Spawn → Confirm
 
 ## Development status
 
-**0.1.3-alpha** — final core-stabilization release.
+**0.1.4-alpha** — client loading lifecycle fix.
 
-Core Resource Version: `0.1.3-alpha`
+Core Resource Version: `0.1.4-alpha`
 
 Core API Version: `1`
 
@@ -93,7 +93,7 @@ ensure gc_identity
 8. Look for the message:
 
 ```text
-[GreenCore] [INFO] gc_core 0.1.3-alpha started successfully
+[GreenCore] [INFO] gc_core 0.1.4-alpha started successfully
 ```
 
 ## Configuration
@@ -118,7 +118,7 @@ Server exports:
 | `GetApiVersion`          | number         | API version               |
 | `GetProtocolVersion`     | number         | Protocol version          |
 | `GetVersion`             | table          | `gc_core` version         |
-| `GetVersionString`       | string         | `0.1.3-alpha`             |
+| `GetVersionString`       | string         | `0.1.4-alpha`             |
 | `IsPlayerConnected`      | boolean        | Checks session            |
 | `IsPlayerReady`          | boolean        | Checks readiness          |
 | `IsPlayerSpawned`        | boolean        | Checks spawn              |

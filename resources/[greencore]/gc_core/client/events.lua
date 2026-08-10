@@ -117,6 +117,7 @@ GCClientSecurity.RegisterServerEvent(GCEvents.Client.spawnConfirmed, function(pa
             GCClientState.SetSpawning(false)
             GCClientState.SetSpawnDecisionReceived(false)
             GCClientState.SetSpawned(true)
+            GCClientLoadingScreen.Complete()
         end
         return
     end
@@ -127,6 +128,7 @@ GCClientSecurity.RegisterServerEvent(GCEvents.Client.spawnConfirmed, function(pa
     GCClientState.SetSpawnConfirming(false)
     GCClientState.SetSpawnDecisionReceived(false)
     GCClientState.SetSpawned(true)
+    GCClientLoadingScreen.Complete()
 end)
 
 -- RU: Обработчик принудительной ресинхронизации после рестарта gc_core.

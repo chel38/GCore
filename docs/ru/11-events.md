@@ -27,7 +27,7 @@ Local trigger allowed: **NO** для каждого события ниже. О�
 | `gc_core:client:connectionAccepted` | internal protocol | `{apiVersion:integer, protocolVersion:integer}` | N/A | server origin; точные local versions | `GC-PROTOCOL-MISMATCH-001` |
 | `gc_core:client:spawnApproved` | internal protocol | decisionId, finite position, allowlisted ped, expiry, attempt | N/A | server origin; exact schema; duplicate guard | `GC-PAYLOAD-*` |
 | `gc_core:client:spawnRejected` | internal protocol | `{errorCode:known string, retryable:boolean}` | N/A | server origin; known code | `GC-PAYLOAD-SCHEMA-001` |
-| `gc_core:client:spawnConfirmed` | internal protocol | `{decisionId?:string, state:'spawned'}` | N/A | server origin; exact state | `GC-PAYLOAD-SCHEMA-001` |
+| `gc_core:client:spawnConfirmed` | internal protocol | `{decisionId?:string, state:'spawned'}` | N/A | server origin; exact state; фиксирует client state и один раз закрывает loading screen | `GC-PAYLOAD-SCHEMA-001` |
 | `gc_core:client:forceResync` | internal recovery prompt | без payload | bounded server attempts | server origin; один объединяемый bounded readiness wait | нет |
 | `gc_core:client:notify` | public presentation | `{message:string≤256, type:allowlisted}` | server API validation | server origin; exact schema | `GC-PAYLOAD-SCHEMA-001` |
 

@@ -6,6 +6,21 @@ All notable changes to this project are documented in this file.
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.4-alpha] - 2026-08-10
+
+### Исправлено / Fixed
+
+- Клиент теперь закрывает системный экран FiveM `Awaiting scripts` после
+  валидного server-origin `spawnConfirmed`, а не оставляет его поверх уже
+  загруженного игрового мира.
+- Тот же idempotent flow работает при restart/recovery: повторное подтверждение
+  не вызывает loading-screen natives второй раз.
+
+### Изменено / Changed
+
+- Resource version повышена до `0.1.4-alpha`; Core API и network protocol
+  остаются совместимыми версиями `1`.
+
 ## [0.1.3-alpha] - 2026-08-09
 
 ### Исправлено / Fixed

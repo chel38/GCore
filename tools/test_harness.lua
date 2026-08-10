@@ -8,6 +8,7 @@ local clientEvents = {}
 local registeredClientHandlers = {}
 local timers = {}
 local droppedPlayers = {}
+local loadingScreenShutdowns = { nui = 0, game = 0 }
 
 GCTestHarness = {}
 
@@ -45,6 +46,12 @@ function TriggerClientEvent(eventName, target, payload)
     clientEvents[#clientEvents + 1] = { eventName, target, payload }
 end
 function TriggerServerEvent() end
+function ShutdownLoadingScreenNui()
+    loadingScreenShutdowns.nui = loadingScreenShutdowns.nui + 1
+end
+function ShutdownLoadingScreen()
+    loadingScreenShutdowns.game = loadingScreenShutdowns.game + 1
+end
 
 function RegisterNetEvent(eventName, handler)
     registeredClientHandlers[eventName] = handler
@@ -98,6 +105,27 @@ end
 
 function GCTestHarness.ClearDroppedPlayers()
     droppedPlayers = {}
+end
+
+function GCTestHarness.EmitServerClientEvent(eventName, payload)
+    local handler = registeredClientHandlers[eventName]
+
+    if not handler then
+        return nil
+    end
+
+    local previousSource = source
+    source = 65535
+    local result = handler(payload)
+    source = previousSource
+    return result
+end
+
+function GCTestHarness.GetLoadingScreenShutdowns()
+    return {
+        nui = loadingScreenShutdowns.nui,
+        game = loadingScreenShutdowns.game
+    }
 end
 
 function joaat(value)
@@ -185,16 +213,18 @@ local testFiles = {
     'tests/notifications_test.lua',
     'tests/runtime_test.lua',
     'tests/client_event_security_test.lua',
+    'tests/loading_screen_test.lua',
     'tests/api_test.lua'
 }
 
 for _, fileName in ipairs(runtimeFiles) do loadFile(fileName) end
 
+loadFile('client/state.lua')
+loadFile('client/readiness.lua')
+loadFile('client/loading.lua')
 -- Register the real production client handlers. Local TriggerEvent reaches the
 -- actual wrapper but must stop before any client-only side effect or dependency.
 loadFile('client/events.lua')
-loadFile('client/state.lua')
-loadFile('client/readiness.lua')
 
 for _, fileName in ipairs(testFiles) do loadFile(fileName) end
 

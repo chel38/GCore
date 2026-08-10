@@ -28,6 +28,7 @@ sequenceDiagram
         S->>S: spawn_confirming → spawned
         S->>S: Consume decision
         S-->>C: spawnConfirmed
+        C->>C: Commit client spawned state и закрытие Awaiting scripts
     else Snapshot fails
         S->>S: Classify error and apply bounded policy
         S-->>C: spawnRejected(retryable)
@@ -36,6 +37,10 @@ sequenceDiagram
 
 Внутренний переход в `spawn_confirming` завершается **до** отправки
 `spawnApproved`, поэтому быстрый ответ клиента не обгоняет server state.
+
+Клиент закрывает оба слоя загрузки FiveM только после этого валидного
+server-origin `spawnConfirmed`. Завершение идемпотентно: recovery или duplicate
+confirmation не вызывают loading-screen natives повторно.
 
 ## Серверная проверка
 

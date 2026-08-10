@@ -22,9 +22,9 @@ GreenCore — это минимальный модульный движок дл
 
 ## Статус разработки
 
-**0.1.3-alpha** — финальная версия этапа стабилизации ядра.
+**0.1.4-alpha** — исправление жизненного цикла клиентской загрузки.
 
-Core Resource Version: `0.1.3-alpha`
+Core Resource Version: `0.1.4-alpha`
 
 Core API Version: `1`
 
@@ -93,7 +93,7 @@ ensure gc_identity
 8. Найдите сообщение:
 
 ```text
-[GreenCore] [INFO] gc_core 0.1.3-alpha started successfully
+[GreenCore] [INFO] gc_core 0.1.4-alpha started successfully
 ```
 
 ## Конфигурация
@@ -118,7 +118,7 @@ resources/[greencore]/
 | `GetApiVersion`          | number         | Версия API                |
 | `GetProtocolVersion`     | number         | Версия протокола          |
 | `GetVersion`             | table          | Версия `gc_core`          |
-| `GetVersionString`       | string         | Строка `0.1.3-alpha`      |
+| `GetVersionString`       | string         | Строка `0.1.4-alpha`      |
 | `IsPlayerConnected`      | boolean        | Проверяет сессию          |
 | `IsPlayerReady`          | boolean        | Проверяет готовность      |
 | `IsPlayerSpawned`        | boolean        | Проверяет спавн           |

@@ -41,11 +41,14 @@ end)
 Валидные `connectionAccepted`, `spawnApproved`, `spawnRejected` или
 `spawnConfirmed` останавливают retry loop. Все они защищены server-origin guard.
 
+Только валидный `spawnConfirmed` также закрывает loading screen FiveM. Локальные
+события и более ранние lifecycle stages не могут убрать `Awaiting scripts`.
+
 ## Payload готовности
 
 ```lua
 {
-    clientVersion = '0.1.3-alpha',
+    clientVersion = '0.1.4-alpha',
     protocolVersion = 1,
     locale = 'ru'
 }

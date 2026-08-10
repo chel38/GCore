@@ -38,7 +38,7 @@ ensure gc_core
 Проверка запуска:
 
 - txAdmin слушает `40120`, FXServer — `30120` TCP/UDP;
-- лог содержит authentication succeeded и `gc_core 0.1.3-alpha started successfully`;
+- лог содержит authentication succeeded и `gc_core 0.1.4-alpha started successfully`;
 - после изменения `fxmanifest.lua` выполните `refresh`, затем `restart gc_core`;
 - после тестов верните `gc_runTests 0`.
 
