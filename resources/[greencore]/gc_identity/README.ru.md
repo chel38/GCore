@@ -1,44 +1,86 @@
 # gc_identity
 
-`gc_identity` определяет, кем является подключённый игрок GCore. `gc_core`
-владеет connection/session/spawn lifecycle, а этот независимый модуль — аккаунтом
-по license, списком персонажей, выбранным персонажем и identity state.
+`gc_identity` — независимый server-authoritative domain аккаунтов и персонажей
+GCore. `gc_core` отвечает за connection/session/spawn, а этот resource — за
+регистрацию, авторизацию по trusted identifier, персонажей и identity readiness.
 
-Версия: `0.1.0-alpha`
-Identity API: `1`
-Identity protocol: `1`
-Требуемый Core API: `>= 1`
+- Resource version: `0.2.0-alpha`
+- Identity API: `1` (backward-compatible, добавлен health export)
+- Identity protocol: `1`
+- Требуемый Core API: `>= 1`
+- Persistence: MariaDB через `oxmysql`
+- NUI: TypeScript + Tailwind CSS
 
-## Scope
+## Что реализовано
 
-MVP автоматически находит или создаёт аккаунт через trusted server-side core
-identifier. Игрок может создать до трёх персонажей и выбрать одного. Здесь нет
-паролей, NUI, ролей, денег, inventory, jobs или общей database layer.
+Первое подключение:
+
+```text
+trusted server-side FiveM license
+            ↓
+аккаунта нет → явная регистрация email
+            ↓
+создание/выбор своего персонажа
+            ↓
+identity state = ready
+```
+
+Повторное подключение:
+
+```text
+trusted license → сохранённый аккаунт → сохранённый выбор → ready
+```
+
+Пароли на этом этапе намеренно отключены. Модуль не собирает, не передаёт, не
+хранит и не имитирует проверку пароля. Client-provided identifier, account ID,
+authorization state и утверждение ownership никогда не считаются trusted.
 
 ## Установка
 
-Resource объявляет `dependency 'gc_core'`:
+1. Установите release build `oxmysql` как resource `oxmysql`.
+2. Запустите MariaDB и создайте отдельные database/user.
+3. Задайте connection string вне репозитория:
 
 ```cfg
+set mysql_connection_string "mysql://gcore:CHANGE_ME@127.0.0.1:3306/gcore?charset=utf8mb4"
+ensure oxmysql
 ensure gc_core
 ensure gc_identity
 ```
 
-После административного `restart gc_core` FiveM останавливает declared dependants.
-Затем выполните `ensure gc_identity`: модуль проведёт bounded recovery online players
-и восстановит сохранённый выбор персонажа.
+Не коммитьте credentials. При старте `gc_identity` применяет упорядоченные
+идемпотентные migrations. Если MariaDB/oxmysql или migration недоступны, модуль
+остаётся в явном degraded state и никогда молча не переключается на JSON.
 
-Runtime-данные сохраняются в `data/identities.json` и игнорируются Git. Их нужно
-резервировать как другие приватные server data.
+Старый adapter `data/identities.json` используется только как read-only источник
+миграции. При `storage.importLegacyJson = true` записи импортируются
+идемпотентно и должны завершить email registration. Перед production migration
+сделайте backup MariaDB и legacy file.
 
-## Команды
+## NUI и команды
 
-- `/gcidentity` — запросить свежий identity snapshot.
-- `/gccreate Имя Фамилия` — создать персонажа после core spawn.
-- `/gcselect ID` — выбрать принадлежащего текущему аккаунту персонажа.
+NUI содержит loading, registration, создание/выбор персонажа, ошибки и
+подтверждение выхода. До authoritative `ready` он удерживает focus и замораживает
+локальное представление PED. NUI callbacks только формируют запросы; lifecycle,
+exact schema, rate, replay ID и ownership проверяет сервер.
 
-Команды — только минимальная alpha interaction surface. Сервер проверяет payload,
-lifecycle, ownership, rate limit и replay ID. NUI для MVP не нужен.
+Диагностические команды сохранены:
+
+- `/gcidentity` — запросить свежий snapshot;
+- `/gcregister email@example.com` — запросить регистрацию;
+- `/gccreate Имя Фамилия` — запросить создание персонажа;
+- `/gcselect ID` — запросить выбор.
+
+## State machine
+
+```text
+uninitialized → loading → registration_required → registering
+                         ↘ authorized → character_required
+                                         ↓
+                                  character_selected → ready
+
+active state → error/disconnecting (только валидные transitions)
+```
 
 ## Public server API v1
 
@@ -47,14 +89,18 @@ lifecycle, ownership, rate limit и replay ID. NUI для MVP не нужен.
 | `GetIdentityVersion()` | resource version string |
 | `GetIdentityApiVersion()` | integer API version |
 | `GetIdentityProtocolVersion()` | integer protocol version |
-| `IsAuthorized(source)` | состояние account resolution |
-| `IsIdentityReady(source)` | readiness выбранного персонажа |
+| `GetIdentityHealth()` | detached health DTO |
+| `IsAuthorized(source)` | boolean |
+| `IsIdentityReady(source)` | boolean |
 | `GetIdentityState(source)` | state или `nil` |
 | `GetAccount(source)` | detached Account DTO или `nil` |
 | `GetCharacters(source)` | массив detached Character DTO |
 | `GetSelectedCharacter(source)` | detached Character DTO или `nil` |
 
-Проверка в downstream module:
+Account DTO: `id`, `email`, `status`, `createdAt`. Character DTO: `id`,
+`firstName`, `lastName`, `createdAt`. Trusted identifiers, database metadata,
+rate-limit state, replay cache и внутренние ссылки не пересекают public boundary.
+Все DTO — копии.
 
 ```lua
 local coreReady = exports.gc_core:CanUseGameplayFeatures(source)
@@ -65,29 +111,41 @@ if not coreReady or not identityReady then
 end
 ```
 
-Account DTO содержит только `id` и `createdAt`. Character DTO содержит `id`,
-`firstName`, `lastName`, `createdAt`. Identifier и persistence metadata не
-являются public.
+## Network contract
 
-## Events и security
+Client → server (internal): `hello`, `registerAccount`, `createCharacter`,
+`selectCharacter`, `exit`. Только server → client (internal): `snapshot`,
+`rejected`. Exact schemas находятся в `shared/events.lua` и
+`server/validation.lua`. Server-only client handlers требуют FiveM origin
+`source == 65535`.
 
-Client → server: `hello`, `createCharacter`, `selectCharacter` из registry
-`shared/events.lua`. Server → client: `snapshot`, `rejected`. Server-only client
-handlers проверяют `source == 65535`. Каждый ingress payload проходит exact
-schema, protocol 1, bounded rate и server-side ownership validation.
+## Restart policy
 
-См. полный [design](../../../docs/ru/modules/gc_identity/design.md),
-[Module Contract](../../../docs/ru/module-contract.md) и тесты:
+`restart gc_identity` выполняет bounded recovery online players и восстанавливает
+persisted account/selection. При рестарте `gc_core` FiveM останавливает declared
+dependants; затем оператор должен выполнить `ensure gc_identity`. Это поведение
+resource dependency FiveM, а не потеря данных.
+
+## Разработка
 
 ```sh
 lua tools/module_test_harness.lua . gc_identity
+cd resources/[greencore]/gc_identity/web
+pnpm install --frozen-lockfile
+pnpm test
+pnpm build
 ```
+
+См. [design](../../../docs/ru/modules/gc_identity/design.md),
+[persistence design](../../../docs/ru/modules/gc_identity/persistence-design.md) и
+[implementation report](../../../docs/ru/modules/gc_identity/implementation-report.md).
 
 ## Troubleshooting
 
-- `GC-IDENTITY-CORE-*`: проверьте, что `gc_core` запущен и API не ниже 1.
-- `GC-IDENTITY-STORAGE-*`: проверьте writable data directory и private JSON.
-- `GC-IDENTITY-PROTOCOL-MISMATCH`: client/server resource builds различаются.
-- `GC-IDENTITY-RATE-LIMIT`: дождитесь сброса bounded request window.
-- Модуль остановлен после `restart gc_core`: выполните `ensure gc_identity` согласно
-  документированному dependency restart sequence.
+- `GC-IDENTITY-DATABASE-UNAVAILABLE`: проверьте MariaDB, connection string и
+  порядок `ensure oxmysql`.
+- `GC-IDENTITY-MIGRATION-FAILED`: найдите первую упавшую migration; не обходите
+  её fallback-ом.
+- `GC-IDENTITY-EMAIL-TAKEN`: normalized email уже занят.
+- `GC-IDENTITY-PROTOCOL-MISMATCH`: client/server builds различаются.
+- resource остановился после `restart gc_core`: выполните `ensure gc_identity`.

@@ -41,15 +41,15 @@ Server is the source of truth.
 | Локализация | Lua 5.4 |
 | Тесты     | Lua 5.4    |
 | Документация | Markdown, Mermaid |
-| NUI (будет добавлен позже) | TypeScript + Tailwind CSS |
+| Module NUI | TypeScript + Tailwind CSS |
+| Identity persistence | MariaDB + oxmysql |
 
-> **NUI, когда будет добавлен, будет написан на TypeScript + Tailwind CSS**
-> **и других современных технологиях FiveM. C# не будет использоваться.**
+> **`gc_identity` уже использует TypeScript + Tailwind CSS для NUI. C# не используется.**
 
 ## Что НЕ входит в первую версию
 
-- Регистрация, аккаунты, персонажи
-- База данных
+- Регистрация, аккаунты и персонажи внутри `gc_core` (ими владеет `gc_identity`)
+- Общая database/ORM внутри `gc_core`
 - Деньги, инвентарь, транспорт
 - Чат, HUD, админ-панель
 
@@ -65,7 +65,9 @@ GreenCore/
 ├── examples/
 └── resources/
     └── [greencore]/
-        └── gc_core/
+        ├── gc_core/
+        ├── gc_example/
+        └── gc_identity/
 ```
 
 ## Следующий шаг

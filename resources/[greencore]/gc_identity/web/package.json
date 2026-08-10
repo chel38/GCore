@@ -1,0 +1,19 @@
+{
+  "name": "@gcore/gc-identity-nui",
+  "private": true,
+  "version": "0.2.0-alpha",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "jsdom": "30.0.1",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
+    "vite": "8.2.1",
+    "vitest": "4.1.10"
+  }
+}

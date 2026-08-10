@@ -15,6 +15,8 @@ local function publicAccount(account)
 
     return {
         id = account.id,
+        email = account.email,
+        status = account.status,
         createdAt = account.createdAt
     }
 end
@@ -91,29 +93,147 @@ local function transitionOrError(playerSource, nextState)
     return true
 end
 
+local function failSession(playerSource, generation, errorCode, recoverableState)
+    if GCIdentityStates.IsCurrent(playerSource, generation) then
+        local nextState = recoverableState
+
+        if not nextState
+            or not GCIdentityStates.Transition(playerSource, nextState) then
+            GCIdentityStates.Transition(playerSource, 'error')
+        end
+    end
+
+    return nil, errorCode
+end
+
+local function selectedFrom(characters, characterId)
+    if not characterId then
+        return nil
+    end
+
+    for _, character in ipairs(characters or {}) do
+        if character.id == characterId then
+            return character
+        end
+    end
+
+    return nil
+end
+
+local function commitAuthorized(
+    playerSource,
+    generation,
+    account,
+    characters,
+    identifierType,
+    identifier
+)
+    if not GCIdentityStates.IsCurrent(playerSource, generation) then
+        return nil, 'GC-IDENTITY-SESSION-STALE'
+    end
+
+    if account.status ~= 'active' then
+        return failSession(playerSource, generation, 'GC-IDENTITY-ACCOUNT-DISABLED')
+    end
+
+    local touched, touchError = GCIdentityRepository.TouchLogin(
+        account.id,
+        identifierType,
+        identifier
+    )
+
+    if not touched then
+        return failSession(playerSource, generation, touchError)
+    end
+
+    if not GCIdentityStates.IsCurrent(playerSource, generation) then
+        return nil, 'GC-IDENTITY-SESSION-STALE'
+    end
+
+    local bound, bindError = GCIdentityStates.BindAccount(playerSource, account)
+
+    if not bound then
+        return failSession(playerSource, generation, bindError)
+    end
+
+    GCIdentityStates.SetCharacters(playerSource, characters)
+    local transitioned, transitionError = transitionOrError(playerSource, 'authorized')
+
+    if not transitioned then
+        return failSession(playerSource, generation, transitionError)
+    end
+
+    local selected = selectedFrom(characters, account.selectedCharacterId)
+
+    if selected then
+        GCIdentityStates.SelectCharacter(playerSource, selected.id)
+        transitioned, transitionError = transitionOrError(playerSource, 'character_selected')
+
+        if transitioned then
+            transitioned, transitionError = transitionOrError(playerSource, 'ready')
+        end
+    else
+        GCIdentityStates.SelectCharacter(playerSource, nil)
+        transitioned, transitionError = transitionOrError(playerSource, 'character_required')
+    end
+
+    if not transitioned then
+        return failSession(playerSource, generation, transitionError)
+    end
+
+    return GCIdentityService.GetSnapshot(playerSource)
+end
+
+local function replayResult(playerSource, action, requestId)
+    local replay = GCIdentityStates.GetProcessed(playerSource, action, requestId)
+
+    if not replay then
+        return nil
+    end
+
+    if replay.ok then
+        return replay.value, nil, true
+    end
+
+    return nil, replay.code, true
+end
+
+local function recordResult(playerSource, action, requestId, value, code)
+    GCIdentityStates.RecordProcessed(playerSource, action, requestId, {
+        ok = code == nil,
+        value = value,
+        code = code
+    })
+end
+
 function GCIdentityService.SetAvailable(value)
     available = value == true
 end
 
 function GCIdentityService.IsAvailable()
-    return available and GCIdentityRepository.IsLoaded()
+    return available and GCIdentityRepository.IsReady()
 end
 
 function GCIdentityService.GetAccount(playerSource)
     local session = GCIdentityStates.Get(playerSource)
-    return session and publicAccount(GCIdentityRepository.GetAccountById(session.accountId)) or nil
+
+    if not session or not GCIdentityStates.IsAuthorized(playerSource) then
+        return nil
+    end
+
+    return publicAccount(session.account)
 end
 
 function GCIdentityService.GetCharacters(playerSource)
     local session = GCIdentityStates.Get(playerSource)
 
-    if not session or not session.accountId then
+    if not session or not GCIdentityStates.IsAuthorized(playerSource) then
         return {}
     end
 
     local result = {}
 
-    for _, character in ipairs(GCIdentityRepository.GetCharacters(session.accountId)) do
+    for _, character in ipairs(session.characters or {}) do
         table.insert(result, publicCharacter(character))
     end
 
@@ -127,7 +247,7 @@ function GCIdentityService.GetSelectedCharacter(playerSource)
         return nil
     end
 
-    return publicCharacter(GCIdentityRepository.GetCharacterById(session.selectedCharacterId))
+    return publicCharacter(selectedFrom(session.characters, session.selectedCharacterId))
 end
 
 function GCIdentityService.GetSnapshot(playerSource)
@@ -142,7 +262,11 @@ function GCIdentityService.GetSnapshot(playerSource)
         state = session.state,
         account = GCIdentityService.GetAccount(playerSource),
         characters = GCIdentityService.GetCharacters(playerSource),
-        selectedCharacter = GCIdentityService.GetSelectedCharacter(playerSource)
+        selectedCharacter = GCIdentityService.GetSelectedCharacter(playerSource),
+        limits = {
+            maxCharacters = GCIdentityConfig.characters.maximum
+        },
+        passwordAuthentication = false
     }
 end
 
@@ -152,7 +276,7 @@ function GCIdentityService.Resolve(playerSource)
     end
 
     if not GCIdentityService.IsAvailable() then
-        return nil, 'GC-IDENTITY-STORAGE-NOT-LOADED'
+        return nil, 'GC-IDENTITY-DATABASE-UNAVAILABLE'
     end
 
     local core, coreError = coreFor(playerSource, false)
@@ -161,13 +285,20 @@ function GCIdentityService.Resolve(playerSource)
         return nil, coreError
     end
 
-    local existingSession = GCIdentityStates.Get(playerSource)
+    local existing = GCIdentityStates.Get(playerSource)
 
-    if existingSession and GCIdentityStates.IsAuthorized(playerSource) then
+    if existing and (
+        GCIdentityStates.IsAuthorized(playerSource)
+        or existing.state == 'registration_required'
+    ) then
         return GCIdentityService.GetSnapshot(playerSource)
     end
 
-    if existingSession and existingSession.state == 'error' then
+    if existing and (existing.state == 'loading' or existing.state == 'registering') then
+        return nil, 'GC-IDENTITY-OPERATION-IN-PROGRESS'
+    end
+
+    if existing then
         GCIdentityStates.Remove(playerSource)
     end
 
@@ -177,7 +308,92 @@ function GCIdentityService.Resolve(playerSource)
         return nil, sessionError
     end
 
-    local transitioned, transitionError = transitionOrError(playerSource, 'account_required')
+    local generation = session.generation
+    local transitioned, transitionError = transitionOrError(playerSource, 'loading')
+
+    if not transitioned then
+        return failSession(playerSource, generation, transitionError)
+    end
+
+    local identifierType, identifier, identifierError = trustedIdentifier(core, playerSource)
+
+    if not identifier then
+        return failSession(playerSource, generation, identifierError)
+    end
+
+    local account, accountError = GCIdentityRepository.FindAccountByIdentifier(
+        identifierType,
+        identifier
+    )
+
+    if not GCIdentityStates.IsCurrent(playerSource, generation) then
+        return nil, 'GC-IDENTITY-SESSION-STALE'
+    end
+
+    if not account then
+        if accountError == 'GC-IDENTITY-ACCOUNT-NOT-FOUND' then
+            transitionOrError(playerSource, 'registration_required')
+            return GCIdentityService.GetSnapshot(playerSource)
+        end
+
+        return failSession(playerSource, generation, accountError)
+    end
+
+    if account.status ~= 'active' then
+        return failSession(playerSource, generation, 'GC-IDENTITY-ACCOUNT-DISABLED')
+    end
+
+    if type(account.email) ~= 'string' or account.email == '' then
+        GCIdentityStates.BindAccount(playerSource, account)
+        transitionOrError(playerSource, 'registration_required')
+        return GCIdentityService.GetSnapshot(playerSource)
+    end
+
+    local characters, charactersError = GCIdentityRepository.GetCharacters(account.id)
+
+    if not characters then
+        return failSession(playerSource, generation, charactersError)
+    end
+
+    return commitAuthorized(
+        playerSource,
+        generation,
+        account,
+        characters,
+        identifierType,
+        identifier
+    )
+end
+
+function GCIdentityService.Hello(playerSource)
+    return GCIdentityService.Resolve(playerSource)
+end
+
+function GCIdentityService.RegisterAccount(playerSource, payload)
+    local replayValue, replayError, replayed = replayResult(
+        playerSource,
+        'registration',
+        payload.requestId
+    )
+
+    if replayed then
+        return replayValue, replayError, true
+    end
+
+    local core, coreError = coreFor(playerSource, true)
+
+    if not core then
+        return nil, coreError
+    end
+
+    local session = GCIdentityStates.Get(playerSource)
+
+    if not session or session.state ~= 'registration_required' then
+        return nil, 'GC-IDENTITY-INVALID-STATE'
+    end
+
+    local generation = session.generation
+    local transitioned, transitionError = transitionOrError(playerSource, 'registering')
 
     if not transitioned then
         return nil, transitionError
@@ -186,57 +402,78 @@ function GCIdentityService.Resolve(playerSource)
     local identifierType, identifier, identifierError = trustedIdentifier(core, playerSource)
 
     if not identifier then
-        GCIdentityStates.Transition(playerSource, 'error')
-        return nil, identifierError
+        return failSession(playerSource, generation, identifierError, 'registration_required')
     end
 
-    local account = GCIdentityRepository.FindAccountByIdentifier(identifierType, identifier)
+    local account, registrationError
+
+    if session.accountId then
+        account, registrationError = GCIdentityRepository.CompleteRegistration(
+            session.accountId,
+            payload.email,
+            identifierType,
+            identifier
+        )
+    else
+        account, registrationError = GCIdentityRepository.RegisterAccount(
+            payload.email,
+            identifierType,
+            identifier
+        )
+    end
+
+    if not GCIdentityStates.IsCurrent(playerSource, generation) then
+        return nil, 'GC-IDENTITY-SESSION-STALE'
+    end
 
     if not account then
-        account, sessionError = GCIdentityRepository.CreateAccount(identifierType, identifier)
-
-        if not account then
-            GCIdentityStates.Transition(playerSource, 'error')
-            return nil, sessionError
-        end
+        local recoverable = registrationError == 'GC-IDENTITY-EMAIL-TAKEN'
+            or registrationError == 'GC-IDENTITY-REGISTRATION-CONFLICT'
+        local result, resultError = failSession(
+            playerSource,
+            generation,
+            registrationError,
+            recoverable and 'registration_required' or nil
+        )
+        recordResult(playerSource, 'registration', payload.requestId, result, resultError)
+        return result, resultError
     end
 
-    session.accountId = account.id
-    transitioned, transitionError = transitionOrError(playerSource, 'authorized')
+    local characters, charactersError = GCIdentityRepository.GetCharacters(account.id)
 
-    if not transitioned then
-        return nil, transitionError
+    if not characters then
+        return failSession(playerSource, generation, charactersError)
     end
 
-    local selected = account.selectedCharacterId
-        and GCIdentityRepository.GetCharacterById(account.selectedCharacterId)
+    local snapshot, authorizeError = commitAuthorized(
+        playerSource,
+        generation,
+        account,
+        characters,
+        identifierType,
+        identifier
+    )
 
-    if selected and selected.accountId == account.id then
-        session.selectedCharacterId = selected.id
-        transitioned, transitionError = transitionOrError(playerSource, 'ready')
-    else
-        session.selectedCharacterId = nil
-        transitioned, transitionError = transitionOrError(playerSource, 'character_required')
+    if not snapshot then
+        return nil, authorizeError
     end
 
-    if not transitioned then
-        return nil, transitionError
-    end
-
-    return GCIdentityService.GetSnapshot(playerSource)
-end
-
-function GCIdentityService.Hello(playerSource)
-    local allowed, rateError = GCIdentityRateLimit.Check(playerSource, 'hello')
-
-    if not allowed then
-        return nil, rateError
-    end
-
-    return GCIdentityService.Resolve(playerSource)
+    local accountDto = publicAccount(account)
+    recordResult(playerSource, 'registration', payload.requestId, accountDto, nil)
+    return accountDto, nil, false
 end
 
 function GCIdentityService.CreateCharacter(playerSource, payload)
+    local replayValue, replayError, replayed = replayResult(
+        playerSource,
+        'createCharacter',
+        payload.requestId
+    )
+
+    if replayed then
+        return replayValue and publicCharacter(replayValue) or nil, replayError, true
+    end
+
     local core, coreError = coreFor(playerSource, true)
 
     if not core then
@@ -246,48 +483,42 @@ function GCIdentityService.CreateCharacter(playerSource, payload)
     local session = GCIdentityStates.Get(playerSource)
 
     if not session or not GCIdentityStates.IsAuthorized(playerSource) then
-        return nil, 'GC-IDENTITY-STATE-NOT-AUTHORIZED'
+        return nil, 'GC-IDENTITY-NOT-AUTHORIZED'
     end
 
-    local replay = GCIdentityStates.GetProcessed(playerSource, 'createCharacter', payload.requestId)
-
-    if replay then
-        return publicCharacter(replay), nil, true
-    end
-
-    local allowed, rateError = GCIdentityRateLimit.Check(playerSource, 'createCharacter')
-
-    if not allowed then
-        return nil, rateError
-    end
-
-    local characters = GCIdentityRepository.GetCharacters(session.accountId)
-
-    if #characters >= GCIdentityConfig.characters.maximum then
-        return nil, 'GC-IDENTITY-CHARACTER-LIMIT'
-    end
-
+    local generation = session.generation
     local character, createError = GCIdentityRepository.CreateCharacter(
         session.accountId,
         payload.firstName,
-        payload.lastName
+        payload.lastName,
+        GCIdentityConfig.characters.maximum
     )
 
+    if not GCIdentityStates.IsCurrent(playerSource, generation) then
+        return nil, 'GC-IDENTITY-SESSION-STALE'
+    end
+
     if not character then
+        recordResult(playerSource, 'createCharacter', payload.requestId, nil, createError)
         return nil, createError
     end
 
-    GCIdentityStates.RecordProcessed(
-        playerSource,
-        'createCharacter',
-        payload.requestId,
-        character
-    )
-
+    GCIdentityStates.AddCharacter(playerSource, character)
+    recordResult(playerSource, 'createCharacter', payload.requestId, character, nil)
     return publicCharacter(character), nil, false
 end
 
 function GCIdentityService.SelectCharacter(playerSource, payload)
+    local replayValue, replayError, replayed = replayResult(
+        playerSource,
+        'selectCharacter',
+        payload.requestId
+    )
+
+    if replayed then
+        return replayValue and publicCharacter(replayValue) or nil, replayError, true
+    end
+
     local core, coreError = coreFor(playerSource, true)
 
     if not core then
@@ -297,45 +528,36 @@ function GCIdentityService.SelectCharacter(playerSource, payload)
     local session = GCIdentityStates.Get(playerSource)
 
     if not session or not GCIdentityStates.IsAuthorized(playerSource) then
-        return nil, 'GC-IDENTITY-STATE-NOT-AUTHORIZED'
+        return nil, 'GC-IDENTITY-NOT-AUTHORIZED'
     end
 
-    local replay = GCIdentityStates.GetProcessed(playerSource, 'selectCharacter', payload.requestId)
-
-    if replay then
-        return publicCharacter(replay), nil, true
-    end
-
-    local allowed, rateError = GCIdentityRateLimit.Check(playerSource, 'selectCharacter')
-
-    if not allowed then
-        return nil, rateError
-    end
-
-    local selected, selectError = GCIdentityRepository.SelectCharacter(
+    local generation = session.generation
+    local character, selectError = GCIdentityRepository.SelectCharacter(
         session.accountId,
         payload.characterId
     )
 
-    if not selected then
+    if not GCIdentityStates.IsCurrent(playerSource, generation) then
+        return nil, 'GC-IDENTITY-SESSION-STALE'
+    end
+
+    if not character then
+        recordResult(playerSource, 'selectCharacter', payload.requestId, nil, selectError)
         return nil, selectError
     end
 
-    local character = GCIdentityRepository.GetCharacterById(payload.characterId)
-    session.selectedCharacterId = character.id
-    local transitioned, transitionError = transitionOrError(playerSource, 'ready')
+    GCIdentityStates.SelectCharacter(playerSource, character.id)
+    local transitioned, transitionError = transitionOrError(playerSource, 'character_selected')
 
-    if not transitioned then
-        return nil, transitionError
+    if transitioned then
+        transitioned, transitionError = transitionOrError(playerSource, 'ready')
     end
 
-    GCIdentityStates.RecordProcessed(
-        playerSource,
-        'selectCharacter',
-        payload.requestId,
-        character
-    )
+    if not transitioned then
+        return failSession(playerSource, generation, transitionError)
+    end
 
+    recordResult(playerSource, 'selectCharacter', payload.requestId, character, nil)
     return publicCharacter(character), nil, false
 end
 
@@ -373,6 +595,10 @@ function GCIdentityService.RecoverOnlinePlayers()
 end
 
 function GCIdentityService.Disconnect(playerSource)
+    if GCIdentityStates.Get(playerSource) then
+        GCIdentityStates.Transition(playerSource, 'disconnecting')
+    end
+
     GCIdentityStates.Remove(playerSource)
     GCIdentityRateLimit.Clear(playerSource)
 end

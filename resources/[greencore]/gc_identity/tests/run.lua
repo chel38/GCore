@@ -4,11 +4,15 @@ local publicExports = {}
 local commands = {}
 local clientEvents = {}
 local serverEvents = {}
-local storageRaw
-local storageData
-local saveFails = false
+local nuiCallbacks = {}
+local nuiMessages = {}
+local droppedPlayers = {}
+local legacyRaw
+local legacyData
 local currentTime = 1000
 local onlinePlayers = {}
+local focusState = false
+local frozenState = false
 
 local function deepCopy(value, seen)
     if type(value) ~= 'table' then
@@ -35,7 +39,8 @@ local core = {
     apiVersion = 1,
     connected = {},
     ready = {},
-    gameplay = {}
+    gameplay = {},
+    identifiers = {}
 }
 
 function core:GetApiVersion()
@@ -55,11 +60,15 @@ function core:CanUseGameplayFeatures(playerSource)
 end
 
 function core:GetPlayerIdentifier(playerSource, identifierType)
-    if identifierType == 'license' then
-        return ('license:test-%d'):format(playerSource)
+    if identifierType ~= 'license' then
+        return nil
     end
 
-    return nil
+    if self.identifiers[playerSource] == false then
+        return nil
+    end
+
+    return self.identifiers[playerSource] or ('license:test-%d'):format(playerSource)
 end
 
 exports = setmetatable({ gc_core = core }, {
@@ -70,41 +79,42 @@ exports = setmetatable({ gc_core = core }, {
 
 json = {
     encode = function(value)
-        storageData = deepCopy(value)
+        legacyData = deepCopy(value)
         return '__identity_json__'
     end,
     decode = function(raw)
-        if raw ~= '__identity_json__' or storageData == nil then
+        if raw ~= '__identity_json__' or legacyData == nil then
             error('invalid test JSON')
         end
 
-        return deepCopy(storageData)
+        return deepCopy(legacyData)
     end
 }
+
+MySQL = {}
 
 function GetCurrentResourceName()
     return 'gc_identity'
 end
 
 function GetResourceState(resourceName)
-    if resourceName == 'gc_core' and IdentityTest and IdentityTest.coreState then
-        return IdentityTest.coreState
+    if resourceName == 'gc_core' then
+        return IdentityTest and IdentityTest.coreState or 'started'
+    end
+
+    if resourceName == 'oxmysql' then
+        return IdentityTest and IdentityTest.oxmysqlState or 'started'
     end
 
     return 'started'
 end
 
-function LoadResourceFile()
-    return storageRaw
-end
-
-function SaveResourceFile(_, _, contents)
-    if saveFails then
-        return false
+function LoadResourceFile(_, fileName)
+    if fileName == GCIdentityConfig.storage.legacyFile then
+        return legacyRaw
     end
 
-    storageRaw = contents
-    return true
+    return nil
 end
 
 function GetGameTimer()
@@ -136,6 +146,36 @@ function RegisterCommand(name, handler)
     commands[name] = handler
 end
 
+function RegisterNUICallback(name, handler)
+    nuiCallbacks[name] = handler
+end
+
+function SendNUIMessage(payload)
+    table.insert(nuiMessages, deepCopy(payload))
+end
+
+function SetNuiFocus(hasFocus)
+    focusState = hasFocus == true
+end
+
+function PlayerPedId()
+    return 1
+end
+
+function DoesEntityExist(entity)
+    return entity == 1
+end
+
+function FreezeEntityPosition(_, frozen)
+    frozenState = frozen == true
+end
+
+function DisableAllControlActions() end
+
+function DropPlayer(playerSource, reason)
+    table.insert(droppedPlayers, { source = playerSource, reason = reason })
+end
+
 function CreateThread(handler)
     handler()
 end
@@ -148,40 +188,52 @@ IdentityTest = {
     core = core,
     publicExports = publicExports,
     commands = commands,
-    clientEvents = clientEvents,
-    serverEvents = serverEvents,
-    coreState = 'started'
+    coreState = 'started',
+    oxmysqlState = 'started'
 }
 
-function IdentityTest.Reset(clearStorage)
-    if clearStorage ~= false then
-        storageRaw = nil
-        storageData = nil
+local function useMemoryRepository(resetData)
+    GCIdentityConfig.storage.adapter = 'memory'
+    GCIdentityConfig.storage.importLegacyJson = false
+    GCIdentityConfig.client.restrictControls = false
+    GCIdentityDatabase.Initialize()
+    GCIdentityRepository.Initialize('memory')
+    local memory = GCIdentityRepository.TestAdapter()
+
+    if resetData then
+        memory.Reset()
+        GCIdentityRepository.Initialize('memory')
     end
 
-    saveFails = false
+    GCIdentityService.SetAvailable(true)
+    return memory
+end
+
+function IdentityTest.Reset(resetData)
     currentTime = 1000
     onlinePlayers = {}
     clientEvents = {}
     serverEvents = {}
+    nuiMessages = {}
+    droppedPlayers = {}
+    focusState = false
+    frozenState = false
+    legacyRaw = nil
+    legacyData = nil
     IdentityTest.clientEvents = clientEvents
     IdentityTest.serverEvents = serverEvents
+    IdentityTest.nuiMessages = nuiMessages
+    IdentityTest.droppedPlayers = droppedPlayers
     IdentityTest.coreState = 'started'
+    IdentityTest.oxmysqlState = 'started'
     core.apiVersion = 1
     core.connected = {}
     core.ready = {}
     core.gameplay = {}
+    core.identifiers = {}
     GCIdentityStates.ClearAll()
     GCIdentityRateLimit.ClearAll()
-    GCModuleTest.Load('server/repository.lua')
-    local loaded, loadError = GCIdentityRepository.Load()
-    GCIdentityService.SetAvailable(loaded)
-
-    if not loaded then
-        return false, loadError
-    end
-
-    return true
+    return useMemoryRepository(resetData ~= false)
 end
 
 function IdentityTest.Advance(milliseconds)
@@ -192,22 +244,9 @@ function IdentityTest.SetOnlinePlayers(players)
     onlinePlayers = deepCopy(players)
 end
 
-function IdentityTest.SetSaveFailure(value)
-    saveFails = value == true
-end
-
-function IdentityTest.SetInvalidStorage()
-    storageRaw = '__invalid__'
-    storageData = nil
-end
-
-function IdentityTest.ReloadFromStorage()
-    GCIdentityStates.ClearAll()
-    GCIdentityRateLimit.ClearAll()
-    GCModuleTest.Load('server/repository.lua')
-    local loaded, loadError = GCIdentityRepository.Load()
-    GCIdentityService.SetAvailable(loaded)
-    return loaded, loadError
+function IdentityTest.SetLegacyData(data)
+    legacyData = deepCopy(data)
+    legacyRaw = '__identity_json__'
 end
 
 function IdentityTest.EmitNetwork(name, eventSource, payload)
@@ -223,8 +262,8 @@ function IdentityTest.EmitNetwork(name, eventSource, payload)
     source = previousSource
 end
 
-function IdentityTest.EmitLocal(name, eventSource, payload)
-    return IdentityTest.EmitNetwork(name, eventSource, payload)
+function IdentityTest.DeliverClientEvent(event)
+    IdentityTest.EmitNetwork(event.name, 65535, event.payload)
 end
 
 function IdentityTest.EmitEvent(name, eventSource, argument)
@@ -238,19 +277,92 @@ function IdentityTest.EmitEvent(name, eventSource, argument)
     source = previousSource
 end
 
+function IdentityTest.InvokeNui(name, payload)
+    local result
+    local handler = nuiCallbacks[name]
+
+    if not handler then
+        error('Missing NUI callback: ' .. name)
+    end
+
+    handler(payload or {}, function(response)
+        result = response
+    end)
+    return result
+end
+
 function IdentityTest.LastClientEvent()
     return clientEvents[#clientEvents]
 end
 
+function IdentityTest.LastServerEvent()
+    return serverEvents[#serverEvents]
+end
+
+function IdentityTest.LastNuiMessage()
+    return nuiMessages[#nuiMessages]
+end
+
+function IdentityTest.FocusState()
+    return focusState
+end
+
+function IdentityTest.FrozenState()
+    return frozenState
+end
+
+function IdentityTest.ReloadClient()
+    GCModuleTest.Load('client/main.lua')
+end
+
+function IdentityTest.ResolveAndRegister(playerSource, email, requestId)
+    local snapshot, resolveError = GCIdentityService.Resolve(playerSource)
+
+    if not snapshot then
+        return nil, resolveError
+    end
+
+    if snapshot.state == 'registration_required' then
+        local _, registrationError = GCIdentityService.RegisterAccount(playerSource, {
+            protocolVersion = GCIdentityVersion.protocol,
+            requestId = requestId or ('register_%04d'):format(playerSource),
+            email = email or ('player%d@example.test'):format(playerSource)
+        })
+
+        if registrationError then
+            return nil, registrationError
+        end
+
+        snapshot = GCIdentityService.GetSnapshot(playerSource)
+    end
+
+    return snapshot
+end
+
 for _, fileName in ipairs({
     'shared/version.lua',
-    'shared/config.lua',
+    'shared/config.lua'
+}) do
+    GCModuleTest.Load(fileName)
+end
+
+GCIdentityConfig.storage.adapter = 'memory'
+GCIdentityConfig.storage.importLegacyJson = false
+GCIdentityConfig.client.restrictControls = false
+
+for _, fileName in ipairs({
     'shared/events.lua',
     'shared/client_security.lua',
     'server/logger.lua',
     'server/state.lua',
     'server/validation.lua',
     'server/rate_limit.lua',
+    'server/migrations/registry.lua',
+    'server/migrations/001_initial_identity.lua',
+    'server/database.lua',
+    'server/repositories/memory.lua',
+    'server/repositories/json_legacy.lua',
+    'server/repositories/oxmysql.lua',
     'server/repository.lua',
     'server/service.lua',
     'server/api.lua',
@@ -265,10 +377,13 @@ end
 for _, fileName in ipairs({
     'tests/state_test.lua',
     'tests/validation_test.lua',
+    'tests/repository_test.lua',
     'tests/service_test.lua',
     'tests/security_test.lua',
     'tests/api_test.lua',
-    'tests/restart_test.lua'
+    'tests/migration_test.lua',
+    'tests/restart_test.lua',
+    'tests/nui_test.lua'
 }) do
     GCModuleTest.Load(fileName)
 end

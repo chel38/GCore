@@ -6,8 +6,8 @@
 > **GreenCore runtime полностью написан на Lua.**
 >
 > Сервер, клиент, shared, config, locales и tests `gc_core` — всё на Lua.
-> Дальнейшая разработка и добавление **NUI** будут использовать **TypeScript + Tailwind CSS**
-> и другие современные технологии, поддерживаемые FiveM. **C# использоваться не будет.**
+> NUI модулей использует **TypeScript + Tailwind CSS** и современные технологии,
+> поддерживаемые FiveM. **C# использоваться не будет.**
 
 ---
 
@@ -41,7 +41,7 @@ Network Protocol Version: `1`
 
 Core API Status: **Stable for module development**
 
-Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.1.0-alpha`.
+Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.2.0-alpha`.
 
 ## Возможности версии / Version features
 
@@ -60,23 +60,20 @@ Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.1.0-alpha`.
 - Локализация RU|EN / RU|EN localization
 - Диагностический режим / Diagnostics mode
 - Reference module, использующий только Public API v1 / Public-API-only reference module
-- Независимый identity/character MVP / Independent identity/character MVP
+- Persistent identity/character module с MariaDB и NUI / Persistent MariaDB-backed identity/character module with NUI
 
 ## Ограничения версии / Version limitations
 
 Первая версия **не** включает / The first version does **not** include:
 
 - `gc_core` не содержит аккаунты/персонажей; это отдельный `gc_identity` / `gc_core` does not contain identity; `gc_identity` owns it
-- Production database/ORM (identity MVP uses a private JSON adapter)
+- Общая ORM в `gc_core` / General ORM inside `gc_core`
 - Деньги, инвентарь, транспорт / Money, inventory, vehicles
 - Чат, HUD, админ-панель / Chat, HUD, admin panel
-- NUI в текущей версии (будет добавлен позже) / NUI in the current version (will be added later)
 - C# (не планируется) / C# (not planned)
 
-> **NUI, когда будет добавлен, будет написан на TypeScript + Tailwind CSS**
-> **и других современных технологиях FiveM. C# не будет использоваться.**
-> **When NUI is added, it will be written with TypeScript + Tailwind CSS**
-> **and other modern FiveM technologies. C# will not be used.**
+> **`gc_identity` NUI написан на TypeScript + Tailwind CSS.**
+> **The `gc_identity` NUI is built with TypeScript + Tailwind CSS.**
 
 ## Требования / Requirements
 
@@ -84,6 +81,7 @@ Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.1.0-alpha`.
 - Windows или Linux / Windows or Linux
 - OneSync
 - Lua 5.4 (runtime полностью на Lua / runtime is entirely Lua)
+- Для `gc_identity`: MariaDB + `oxmysql` / For `gc_identity`: MariaDB + `oxmysql`
 
 ## Установка / Installation
 
@@ -94,6 +92,8 @@ Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.1.0-alpha`.
 5. Добавьте / Add:
 
 ```cfg
+set mysql_connection_string "mysql://USER:PASSWORD@127.0.0.1:3306/gcore?charset=utf8mb4"
+ensure oxmysql
 ensure gc_core
 ensure gc_example
 ensure gc_identity
@@ -156,6 +156,7 @@ timestamps, lastPed и locale. Внутренние identifiers, spawn decision 
 - [Контракт модулей](docs/ru/module-contract.md) / [Module Contract](docs/en/module-contract.md)
 - [Зависимости модулей](docs/ru/module-dependencies.md) / [Module dependencies](docs/en/module-dependencies.md)
 - [gc_identity design RU](docs/ru/modules/gc_identity/design.md) / [EN](docs/en/modules/gc_identity/design.md)
+- [Persistent identity report RU](docs/ru/modules/gc_identity/implementation-report.md) / [EN](docs/en/modules/gc_identity/implementation-report.md)
 - [Отчёт модульного этапа](docs/ru/module-ecosystem-report.md) / [Module stage report](docs/en/module-ecosystem-report.md)
 - [Совместимость API](docs/ru/20-api-compatibility.md) / [API compatibility](docs/en/20-api-compatibility.md)
 - [Миграция 0.1.1 → 0.1.2](docs/ru/migration/0.1.1-to-0.1.2.md) / [Migration](docs/en/migration/0.1.1-to-0.1.2.md)

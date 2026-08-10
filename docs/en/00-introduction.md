@@ -41,15 +41,15 @@ The client can only:
 | Localization | Lua 5.4 |
 | Tests     | Lua 5.4    |
 | Documentation | Markdown, Mermaid |
-| NUI (will be added later) | TypeScript + Tailwind CSS |
+| Module NUI | TypeScript + Tailwind CSS |
+| Identity persistence | MariaDB + oxmysql |
 
-> **When NUI is added, it will be written with TypeScript + Tailwind CSS**
-> **and other modern FiveM technologies. C# will not be used.**
+> **`gc_identity` already uses TypeScript + Tailwind CSS for NUI. C# is not used.**
 
 ## What is NOT included in the first version
 
-- Registration, accounts, characters
-- Database
+- Registration, accounts, and characters inside `gc_core` (owned by `gc_identity`)
+- A general database/ORM inside `gc_core`
 - Money, inventory, vehicles
 - Chat, HUD, admin panel
 
@@ -65,7 +65,9 @@ GreenCore/
 ├── examples/
 └── resources/
     └── [greencore]/
-        └── gc_core/
+        ├── gc_core/
+        ├── gc_example/
+        └── gc_identity/
 ```
 
 ## Next step

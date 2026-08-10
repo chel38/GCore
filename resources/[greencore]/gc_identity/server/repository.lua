@@ -1,216 +1,141 @@
 GCIdentityRepository = {}
 
-local resourceName = GetCurrentResourceName()
-local loaded = false
-local data = {
-    nextAccountId = 1,
-    nextCharacterId = 1,
-    accounts = {},
-    characters = {}
-}
+local adapter
+local adapterName
+local ready = false
 
-local function emptyData()
-    return {
-        nextAccountId = 1,
-        nextCharacterId = 1,
-        accounts = {},
-        characters = {}
-    }
+local function unavailable()
+    return nil, 'GC-IDENTITY-DATABASE-UNAVAILABLE'
 end
 
-local function validData(candidate)
-    return type(candidate) == 'table'
-        and type(candidate.nextAccountId) == 'number'
-        and candidate.nextAccountId >= 1
-        and candidate.nextAccountId % 1 == 0
-        and type(candidate.nextCharacterId) == 'number'
-        and candidate.nextCharacterId >= 1
-        and candidate.nextCharacterId % 1 == 0
-        and type(candidate.accounts) == 'table'
-        and type(candidate.characters) == 'table'
+local function call(methodName, ...)
+    if not ready or not adapter or type(adapter[methodName]) ~= 'function' then
+        return unavailable()
+    end
+
+    return adapter[methodName](...)
 end
 
-local function save()
-    local ok, encoded = pcall(json.encode, data)
+function GCIdentityRepository.Initialize(name)
+    adapterName = name or GCIdentityConfig.storage.adapter
+    adapter = GCIdentityRepositories[adapterName]
+    ready = false
 
-    if not ok or type(encoded) ~= 'string' then
-        return false, 'GC-IDENTITY-STORAGE-ENCODE'
+    if not adapter or type(adapter.Initialize) ~= 'function' then
+        return false, 'GC-IDENTITY-REPOSITORY-ADAPTER-INVALID'
     end
 
-    local saved = SaveResourceFile(
-        resourceName,
-        GCIdentityConfig.storage.file,
-        encoded,
-        -1
-    )
+    local initialized, initializeError = adapter.Initialize()
 
-    if saved == false then
-        return false, 'GC-IDENTITY-STORAGE-WRITE'
+    if not initialized then
+        return false, initializeError or 'GC-IDENTITY-DATABASE-UNAVAILABLE'
     end
 
+    ready = true
     return true
 end
 
-function GCIdentityRepository.Load()
-    local raw = LoadResourceFile(resourceName, GCIdentityConfig.storage.file)
-
-    if raw == nil or raw == '' then
-        data = emptyData()
-        loaded = true
-        return true
-    end
-
-    local ok, decoded = pcall(json.decode, raw)
-
-    if not ok or not validData(decoded) then
-        return false, 'GC-IDENTITY-STORAGE-DECODE'
-    end
-
-    data = decoded
-    loaded = true
-    return true
+function GCIdentityRepository.IsReady()
+    return ready and adapter ~= nil
+        and type(adapter.IsReady) == 'function'
+        and adapter.IsReady() == true
 end
 
-function GCIdentityRepository.IsLoaded()
-    return loaded
+function GCIdentityRepository.GetAdapterName()
+    return adapterName
+end
+
+function GCIdentityRepository.SetUnavailable()
+    ready = false
 end
 
 function GCIdentityRepository.FindAccountByIdentifier(identifierType, identifier)
-    for _, account in ipairs(data.accounts) do
-        if account.identifierType == identifierType and account.identifier == identifier then
-            return account
-        end
-    end
+    return call('FindAccountByIdentifier', identifierType, identifier)
+end
 
-    return nil
+function GCIdentityRepository.FindAccountByEmail(email)
+    return call('FindAccountByEmail', email)
 end
 
 function GCIdentityRepository.GetAccountById(accountId)
-    for _, account in ipairs(data.accounts) do
-        if account.id == accountId then
-            return account
-        end
-    end
-
-    return nil
+    return call('GetAccountById', accountId)
 end
 
-function GCIdentityRepository.CreateAccount(identifierType, identifier)
-    if not loaded then
-        return nil, 'GC-IDENTITY-STORAGE-NOT-LOADED'
-    end
+function GCIdentityRepository.RegisterAccount(email, identifierType, identifier)
+    return call('RegisterAccount', email, identifierType, identifier)
+end
 
-    local existing = GCIdentityRepository.FindAccountByIdentifier(identifierType, identifier)
+function GCIdentityRepository.CompleteRegistration(
+    accountId,
+    email,
+    identifierType,
+    identifier
+)
+    return call(
+        'CompleteRegistration',
+        accountId,
+        email,
+        identifierType,
+        identifier
+    )
+end
 
-    if existing then
-        return existing
-    end
-
-    local account = {
-        id = data.nextAccountId,
-        identifierType = identifierType,
-        identifier = identifier,
-        selectedCharacterId = nil,
-        createdAt = os.time(),
-        updatedAt = os.time()
-    }
-    local previousNextId = data.nextAccountId
-    data.nextAccountId = data.nextAccountId + 1
-    table.insert(data.accounts, account)
-
-    local saved, saveError = save()
-
-    if not saved then
-        table.remove(data.accounts)
-        data.nextAccountId = previousNextId
-        return nil, saveError
-    end
-
-    return account
+function GCIdentityRepository.TouchLogin(accountId, identifierType, identifier)
+    return call('TouchLogin', accountId, identifierType, identifier)
 end
 
 function GCIdentityRepository.GetCharacters(accountId)
-    local characters = {}
-
-    for _, character in ipairs(data.characters) do
-        if character.accountId == accountId then
-            table.insert(characters, character)
-        end
-    end
-
-    table.sort(characters, function(left, right)
-        return left.id < right.id
-    end)
-
-    return characters
+    return call('GetCharacters', accountId)
 end
 
 function GCIdentityRepository.GetCharacterById(characterId)
-    for _, character in ipairs(data.characters) do
-        if character.id == characterId then
-            return character
-        end
-    end
-
-    return nil
+    return call('GetCharacterById', characterId)
 end
 
-function GCIdentityRepository.CreateCharacter(accountId, firstName, lastName)
-    if not loaded then
-        return nil, 'GC-IDENTITY-STORAGE-NOT-LOADED'
-    end
-
-    if not GCIdentityRepository.GetAccountById(accountId) then
-        return nil, 'GC-IDENTITY-ACCOUNT-NOT-FOUND'
-    end
-
-    local character = {
-        id = data.nextCharacterId,
-        accountId = accountId,
-        firstName = firstName,
-        lastName = lastName,
-        createdAt = os.time(),
-        updatedAt = os.time()
-    }
-    local previousNextId = data.nextCharacterId
-    data.nextCharacterId = data.nextCharacterId + 1
-    table.insert(data.characters, character)
-
-    local saved, saveError = save()
-
-    if not saved then
-        table.remove(data.characters)
-        data.nextCharacterId = previousNextId
-        return nil, saveError
-    end
-
-    return character
+function GCIdentityRepository.CreateCharacter(accountId, firstName, lastName, maximum)
+    return call('CreateCharacter', accountId, firstName, lastName, maximum)
 end
 
 function GCIdentityRepository.SelectCharacter(accountId, characterId)
-    local account = GCIdentityRepository.GetAccountById(accountId)
-    local character = GCIdentityRepository.GetCharacterById(characterId)
+    return call('SelectCharacter', accountId, characterId)
+end
 
-    if not account then
-        return false, 'GC-IDENTITY-ACCOUNT-NOT-FOUND'
+function GCIdentityRepository.ImportLegacyJson()
+    if not GCIdentityConfig.storage.importLegacyJson then
+        return { imported = 0, skipped = 0 }
     end
 
-    if not character or character.accountId ~= accountId then
-        return false, 'GC-IDENTITY-CHARACTER-NOT-OWNED'
+    local legacy = GCIdentityRepositories.json_legacy
+
+    if not legacy or type(legacy.LoadRecords) ~= 'function' then
+        return nil, 'GC-IDENTITY-LEGACY-STORAGE-INVALID'
     end
 
-    local previousSelection = account.selectedCharacterId
-    local previousUpdatedAt = account.updatedAt
-    account.selectedCharacterId = characterId
-    account.updatedAt = os.time()
+    local records, loadError = legacy.LoadRecords()
 
-    local saved, saveError = save()
-
-    if not saved then
-        account.selectedCharacterId = previousSelection
-        account.updatedAt = previousUpdatedAt
-        return false, saveError
+    if not records then
+        return nil, loadError
     end
 
-    return true
+    local stats = { imported = 0, skipped = 0 }
+
+    for _, record in ipairs(records) do
+        local imported, importError, skipped = call('ImportLegacyAccount', record)
+
+        if not imported then
+            return nil, importError
+        end
+
+        if skipped then
+            stats.skipped = stats.skipped + 1
+        else
+            stats.imported = stats.imported + 1
+        end
+    end
+
+    return stats
+end
+
+function GCIdentityRepository.TestAdapter()
+    return adapter
 end

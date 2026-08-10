@@ -13,12 +13,15 @@ gc_identity ───────→ gc_core Public API v1
 ```text
 gc_core 0.1.4-alpha (API 1)
 ├── gc_example 0.1.0-alpha (reference, без Public API)
-└── gc_identity 0.1.0-alpha (Identity API 1)
+└── gc_identity 0.2.0-alpha (Identity API 1, требуется oxmysql/MariaDB)
 ```
 
 `gc_core` не зависит от модулей. `gc_example` и `gc_identity` также не зависят
 друг от друга. Будущий domain module может требовать Identity API 1, если ему
 нужен выбранный персонаж, но Core API он проверяет отдельно.
+
+`gc_identity` дополнительно зависит от внешнего resource `oxmysql`. Эта связь
+принадлежит identity persistence domain и не переносится в `gc_core`.
 
 Запрещённые связи:
 

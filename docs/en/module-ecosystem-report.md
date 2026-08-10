@@ -1,5 +1,9 @@
 # GCore Module Ecosystem First-Stage Report
 
+> Historical report for the original `gc_identity 0.1.0-alpha` MVP. The current
+> persistent `0.2.0-alpha` result is documented in
+> [gc_identity implementation report](modules/gc_identity/implementation-report.md).
+
 ## 1. Executive Summary
 
 The `gc_example` reference module and the first production MVP, `gc_identity`,

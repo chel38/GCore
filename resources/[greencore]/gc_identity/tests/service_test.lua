@@ -7,74 +7,133 @@ local function createPayload(requestId, firstName, lastName)
     }
 end
 
-GCModuleTest.Register('identity.valid_identity_flow', 'integration', function()
+GCModuleTest.Register('identity.new_identifier_requires_registration', 'integration', function()
     IdentityTest.Reset()
     local snapshot, resolveError = GCIdentityService.Resolve(21)
-    GCModuleTest.ExpectNil(resolveError, 'account resolution succeeds')
-    GCModuleTest.ExpectEqual(snapshot.state, 'character_required', 'new account needs character')
-    GCModuleTest.ExpectNotNil(snapshot.account, 'public account exists')
+    GCModuleTest.ExpectNil(resolveError, 'unknown identifier lookup succeeds')
+    GCModuleTest.ExpectEqual(
+        snapshot.state,
+        'registration_required',
+        'unknown identifier does not auto-create account'
+    )
+    GCModuleTest.ExpectNil(snapshot.account, 'unregistered snapshot exposes no account')
+    GCModuleTest.ExpectFalse(GCIdentityStates.IsAuthorized(21), 'unregistered player is not authorized')
+    GCModuleTest.ExpectEqual(
+        GCIdentityRepository.TestAdapter().GetCounts().accounts,
+        0,
+        'lookup alone creates no persistent account'
+    )
+end)
+
+GCModuleTest.Register('identity.valid_persistent_identity_flow', 'integration', function()
+    IdentityTest.Reset()
+    local snapshot, registrationError = IdentityTest.ResolveAndRegister(
+        22,
+        'anna@example.test',
+        'register_2200'
+    )
+    GCModuleTest.ExpectNil(registrationError, 'registration transaction succeeds')
+    GCModuleTest.ExpectEqual(snapshot.state, 'character_required', 'registered account needs character')
+    GCModuleTest.ExpectEqual(snapshot.account.email, 'anna@example.test', 'public account email returned')
 
     local character, createError = GCIdentityService.CreateCharacter(
-        21,
-        createPayload('request_1001')
+        22,
+        createPayload('request_2201')
     )
     GCModuleTest.ExpectNil(createError, 'character creation succeeds')
     GCModuleTest.ExpectEqual(character.firstName, 'Anna', 'character DTO returned')
 
-    local selected, selectError = GCIdentityService.SelectCharacter(21, {
+    local selected, selectError = GCIdentityService.SelectCharacter(22, {
         protocolVersion = 1,
-        requestId = 'request_1002',
+        requestId = 'request_2202',
         characterId = character.id
     })
     GCModuleTest.ExpectNil(selectError, 'character selection succeeds')
     GCModuleTest.ExpectEqual(selected.id, character.id, 'selected DTO returned')
-    GCModuleTest.ExpectTrue(GCIdentityStates.IsReady(21), 'identity reaches ready')
+    GCModuleTest.ExpectTrue(GCIdentityStates.IsReady(22), 'identity reaches ready')
 end)
 
-GCModuleTest.Register('identity.duplicate_request_is_idempotent', 'integration', function()
+GCModuleTest.Register('identity.returning_identifier_auto_authorizes', 'integration', function()
     IdentityTest.Reset()
-    GCIdentityService.Resolve(22)
-    local payload = createPayload('request_2001')
-    local first, firstError, firstReplay = GCIdentityService.CreateCharacter(22, payload)
-    local second, secondError, secondReplay = GCIdentityService.CreateCharacter(22, payload)
-    GCModuleTest.ExpectNil(firstError, 'first request succeeds')
-    GCModuleTest.ExpectFalse(firstReplay, 'first request is not replay')
-    GCModuleTest.ExpectNil(secondError, 'duplicate request succeeds idempotently')
-    GCModuleTest.ExpectTrue(secondReplay, 'duplicate is marked replay')
+    IdentityTest.ResolveAndRegister(23, 'returning@example.test', 'register_2300')
+    GCIdentityService.Disconnect(23)
+    local snapshot, resolveError = GCIdentityService.Resolve(23)
+    GCModuleTest.ExpectNil(resolveError, 'returning identifier lookup succeeds')
+    GCModuleTest.ExpectTrue(GCIdentityStates.IsAuthorized(23), 'trusted identifier auto-authorizes')
+    GCModuleTest.ExpectEqual(snapshot.account.email, 'returning@example.test', 'same account is restored')
+    GCModuleTest.ExpectEqual(
+        GCIdentityRepository.TestAdapter().GetCounts().accounts,
+        1,
+        'reconnect creates no duplicate account'
+    )
+end)
+
+GCModuleTest.Register('identity.duplicate_requests_are_idempotent', 'integration', function()
+    IdentityTest.Reset()
+    GCIdentityService.Resolve(24)
+    local registration = {
+        protocolVersion = 1,
+        requestId = 'register_2400',
+        email = 'duplicate@example.test'
+    }
+    local firstAccount, firstError, firstReplay = GCIdentityService.RegisterAccount(24, registration)
+    local secondAccount, secondError, secondReplay = GCIdentityService.RegisterAccount(24, registration)
+    GCModuleTest.ExpectNil(firstError, 'first registration succeeds')
+    GCModuleTest.ExpectFalse(firstReplay, 'first registration is not replay')
+    GCModuleTest.ExpectNil(secondError, 'duplicate registration is safe')
+    GCModuleTest.ExpectTrue(secondReplay, 'duplicate registration is replay')
+    GCModuleTest.ExpectEqual(secondAccount.id, firstAccount.id, 'duplicate returns same account DTO')
+
+    local payload = createPayload('request_2401')
+    local first, createError, firstCreateReplay = GCIdentityService.CreateCharacter(24, payload)
+    local second, replayError, secondCreateReplay = GCIdentityService.CreateCharacter(24, payload)
+    GCModuleTest.ExpectNil(createError, 'first character request succeeds')
+    GCModuleTest.ExpectFalse(firstCreateReplay, 'first character request is not replay')
+    GCModuleTest.ExpectNil(replayError, 'duplicate character request succeeds idempotently')
+    GCModuleTest.ExpectTrue(secondCreateReplay, 'duplicate character request is replay')
     GCModuleTest.ExpectEqual(second.id, first.id, 'duplicate returns same character')
-    GCModuleTest.ExpectEqual(#GCIdentityService.GetCharacters(22), 1, 'duplicate creates one character')
+    GCModuleTest.ExpectEqual(#GCIdentityService.GetCharacters(24), 1, 'duplicate creates one character')
 end)
 
 GCModuleTest.Register('identity.character_limit_is_bounded', 'security', function()
     IdentityTest.Reset()
-    GCIdentityService.Resolve(23)
+    IdentityTest.ResolveAndRegister(25, 'limit@example.test', 'register_2500')
 
     for index = 1, GCIdentityConfig.characters.maximum do
         local character = GCIdentityService.CreateCharacter(
-            23,
-            createPayload(('request_30%02d'):format(index), 'Name' .. index)
+            25,
+            createPayload(('request_25%02d'):format(index), 'Name' .. string.char(64 + index))
         )
         GCModuleTest.ExpectNotNil(character, 'character within limit is created')
-        IdentityTest.Advance(61000)
     end
 
     local extra, extraError = GCIdentityService.CreateCharacter(
-        23,
-        createPayload('request_3999', 'Extra')
+        25,
+        createPayload('request_2599', 'Extra')
     )
     GCModuleTest.ExpectNil(extra, 'extra character rejected')
     GCModuleTest.ExpectEqual(extraError, 'GC-IDENTITY-CHARACTER-LIMIT', 'limit has stable code')
 end)
 
-GCModuleTest.Register('identity.storage_failure_rolls_back', 'integration', function()
+GCModuleTest.Register('identity.disabled_account_fails_closed', 'security', function()
+    local memory = IdentityTest.Reset()
+    local snapshot = IdentityTest.ResolveAndRegister(26, 'disabled@example.test', 'register_2600')
+    memory.SetAccountStatus(snapshot.account.id, 'disabled')
+    GCIdentityService.Disconnect(26)
+    local resolved, resolveError = GCIdentityService.Resolve(26)
+    GCModuleTest.ExpectNil(resolved, 'disabled account is not authorized')
+    GCModuleTest.ExpectEqual(resolveError, 'GC-IDENTITY-ACCOUNT-DISABLED', 'disabled code is stable')
+    GCModuleTest.ExpectFalse(GCIdentityStates.IsAuthorized(26), 'disabled identity stays unauthorized')
+end)
+
+GCModuleTest.Register('identity.two_player_sessions_are_isolated', 'integration', function()
     IdentityTest.Reset()
-    IdentityTest.SetSaveFailure(true)
-    local snapshot, resolveError = GCIdentityService.Resolve(24)
-    GCModuleTest.ExpectNil(snapshot, 'failed account save creates no identity')
-    GCModuleTest.ExpectEqual(resolveError, 'GC-IDENTITY-STORAGE-WRITE', 'storage failure returned')
-    IdentityTest.SetSaveFailure(false)
-    GCModuleTest.ExpectNil(
-        GCIdentityRepository.FindAccountByIdentifier('license', 'license:test-24'),
-        'failed save rolls account mutation back'
-    )
+    IdentityTest.ResolveAndRegister(27, 'player-a@example.test', 'register_2700')
+    IdentityTest.ResolveAndRegister(28, 'player-b@example.test', 'register_2800')
+    local characterA = GCIdentityService.CreateCharacter(27, createPayload('request_2701', 'Alice', 'One'))
+    local characterB = GCIdentityService.CreateCharacter(28, createPayload('request_2801', 'Bob', 'Two'))
+    GCModuleTest.ExpectEqual(#GCIdentityService.GetCharacters(27), 1, 'player A owns one character')
+    GCModuleTest.ExpectEqual(#GCIdentityService.GetCharacters(28), 1, 'player B owns one character')
+    GCModuleTest.ExpectEqual(GCIdentityService.GetCharacters(27)[1].id, characterA.id, 'A DTO isolated')
+    GCModuleTest.ExpectEqual(GCIdentityService.GetCharacters(28)[1].id, characterB.id, 'B DTO isolated')
 end)

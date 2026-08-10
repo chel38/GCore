@@ -1,5 +1,9 @@
 # Отчёт о первом этапе модульной экосистемы GCore
 
+> Исторический отчёт по первоначальному MVP `gc_identity 0.1.0-alpha`.
+> Актуальный persistent milestone `0.2.0-alpha` описан в
+> [implementation report](modules/gc_identity/implementation-report.md).
+
 ## 1. Executive Summary
 
 Созданы reference module `gc_example` и первый production MVP `gc_identity`.

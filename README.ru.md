@@ -6,8 +6,8 @@
 > **GreenCore runtime is 100% Lua.**
 >
 > Сервер, клиент, shared, config, locales и tests `gc_core` — всё на Lua.
-> Дальнейшая разработка и добавление **NUI** будут использовать **TypeScript + Tailwind CSS**
-> и другие современные технологии, поддерживаемые FiveM. **C# использоваться не будет.**
+> NUI модулей использует **TypeScript + Tailwind CSS** и другие современные
+> технологии FiveM. **C# использоваться не будет.**
 
 ---
 
@@ -32,7 +32,7 @@ Network Protocol Version: `1`
 
 Core API Status: **Stable for module development**
 
-Модульная экосистема: `gc_example 0.1.0-alpha`, `gc_identity 0.1.0-alpha`.
+Модульная экосистема: `gc_example 0.1.0-alpha`, `gc_identity 0.2.0-alpha`.
 
 ## Возможности версии
 
@@ -49,23 +49,20 @@ Core API Status: **Stable for module development**
 - Локализация RU|EN
 - Диагностический режим
 - Reference module только на Public API
-- Независимый MVP identity и персонажей
+- Persistent identity/character module с MariaDB и NUI
 
 ## Ограничения версии
 
 Первая версия **не** включает:
 
 - Identity внутри `gc_core` (за неё отвечает отдельный `gc_identity`)
-- Production database/ORM (`gc_identity` MVP использует private JSON adapter)
+- Общая database/ORM внутри `gc_core`
 - Деньги, инвентарь, транспорт
 - Чат, HUD, админ-панель
-- NUI (будет добавлен позже) / NUI (will be added later)
 - C# (не планируется) / C# (not planned)
 
-> **NUI, когда будет добавлен, будет написан на TypeScript + Tailwind CSS**
-> **и других современных технологиях FiveM. C# не будет использоваться.**
-> **When NUI is added, it will be written with TypeScript + Tailwind CSS**
-> **and other modern FiveM technologies. C# will not be used.**
+> **NUI модуля `gc_identity` написан на TypeScript + Tailwind CSS.**
+> **The `gc_identity` NUI is built with TypeScript + Tailwind CSS.**
 
 ## Требования
 
@@ -73,6 +70,7 @@ Core API Status: **Stable for module development**
 - Windows или Linux
 - OneSync
 - Lua 5.4 (runtime полностью на Lua / runtime is entirely Lua)
+- MariaDB и `oxmysql`, если включён `gc_identity`
 
 ## Установка
 
@@ -83,6 +81,8 @@ Core API Status: **Stable for module development**
 5. Добавьте:
 
 ```cfg
+set mysql_connection_string "mysql://USER:PASSWORD@127.0.0.1:3306/gcore?charset=utf8mb4"
+ensure oxmysql
 ensure gc_core
 ensure gc_example
 ensure gc_identity
@@ -140,6 +140,7 @@ resources/[greencore]/
 - [Контракт модулей v1](docs/ru/module-contract.md)
 - [Граф зависимостей модулей](docs/ru/module-dependencies.md)
 - [Проектирование gc_identity](docs/ru/modules/gc_identity/design.md)
+- [Отчёт persistent identity](docs/ru/modules/gc_identity/implementation-report.md)
 - [Отчёт первого модульного этапа](docs/ru/module-ecosystem-report.md)
 - [Политика совместимости API](docs/ru/20-api-compatibility.md)
 

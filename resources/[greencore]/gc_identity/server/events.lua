@@ -16,61 +16,92 @@ local function reject(playerSource, payload, code)
     })
 end
 
-RegisterNetEvent(GCIdentityEvents.server.hello, function(payload)
+local function registerIngress(eventName, action, validator, handler, options)
+    RegisterNetEvent(eventName, function(payload)
+        local playerSource = source
+        local allowed, rateError = GCIdentityRateLimit.Check(playerSource, action)
+
+        if not allowed then
+            reject(playerSource, payload, rateError)
+            return
+        end
+
+        local validated, validationError = validator(payload)
+
+        if not validated then
+            reject(playerSource, payload, validationError)
+            return
+        end
+
+        local result, serviceError = handler(playerSource, validated)
+
+        if not result then
+            -- EN: A hello may race the bounded database bootstrap after a
+            -- resource restart. The client already retries, and startup
+            -- recovery sends the authoritative snapshot once storage is ready.
+            -- RU: Hello может обогнать bounded запуск БД после рестарта.
+            -- Клиент уже делает retry, а recovery отправит snapshot после ready.
+            if options and options.silentWhileStarting
+                and serviceError == 'GC-IDENTITY-DATABASE-UNAVAILABLE' then
+                return
+            end
+
+            reject(playerSource, validated, serviceError)
+            return
+        end
+
+        GCIdentityService.SendSnapshot(playerSource)
+    end)
+end
+
+registerIngress(
+    GCIdentityEvents.server.hello,
+    'hello',
+    GCIdentityValidation.ValidateHello,
+    function(playerSource)
+        return GCIdentityService.Hello(playerSource)
+    end,
+    { silentWhileStarting = true }
+)
+
+registerIngress(
+    GCIdentityEvents.server.registerAccount,
+    'registration',
+    GCIdentityValidation.ValidateRegistration,
+    GCIdentityService.RegisterAccount
+)
+
+registerIngress(
+    GCIdentityEvents.server.createCharacter,
+    'createCharacter',
+    GCIdentityValidation.ValidateCreateCharacter,
+    GCIdentityService.CreateCharacter
+)
+
+registerIngress(
+    GCIdentityEvents.server.selectCharacter,
+    'selectCharacter',
+    GCIdentityValidation.ValidateSelectCharacter,
+    GCIdentityService.SelectCharacter
+)
+
+RegisterNetEvent(GCIdentityEvents.server.exit, function(payload)
     local playerSource = source
-    local validated, validationError = GCIdentityValidation.ValidateHello(payload)
+    local allowed, rateError = GCIdentityRateLimit.Check(playerSource, 'exit')
+
+    if not allowed then
+        reject(playerSource, payload, rateError)
+        return
+    end
+
+    local validated, validationError = GCIdentityValidation.ValidateExit(payload)
 
     if not validated then
         reject(playerSource, payload, validationError)
         return
     end
 
-    local snapshot, helloError = GCIdentityService.Hello(playerSource)
-
-    if not snapshot then
-        reject(playerSource, payload, helloError)
-        return
-    end
-
-    GCIdentityService.SendSnapshot(playerSource)
-end)
-
-RegisterNetEvent(GCIdentityEvents.server.createCharacter, function(payload)
-    local playerSource = source
-    local validated, validationError = GCIdentityValidation.ValidateCreateCharacter(payload)
-
-    if not validated then
-        reject(playerSource, payload, validationError)
-        return
-    end
-
-    local character, createError = GCIdentityService.CreateCharacter(playerSource, validated)
-
-    if not character then
-        reject(playerSource, validated, createError)
-        return
-    end
-
-    GCIdentityService.SendSnapshot(playerSource)
-end)
-
-RegisterNetEvent(GCIdentityEvents.server.selectCharacter, function(payload)
-    local playerSource = source
-    local validated, validationError = GCIdentityValidation.ValidateSelectCharacter(payload)
-
-    if not validated then
-        reject(playerSource, payload, validationError)
-        return
-    end
-
-    local character, selectError = GCIdentityService.SelectCharacter(playerSource, validated)
-
-    if not character then
-        reject(playerSource, validated, selectError)
-        return
-    end
-
-    GCIdentityService.SendSnapshot(playerSource)
+    DropPlayer(playerSource, 'Exited identity setup')
 end)
 
 AddEventHandler('playerDropped', function()
@@ -91,7 +122,7 @@ AddEventHandler('onResourceStop', function(resourceName)
 end)
 
 AddEventHandler('onResourceStart', function(resourceName)
-    if resourceName ~= 'gc_core' then
+    if resourceName ~= 'gc_core' or not GCIdentityService.IsAvailable() then
         return
     end
 

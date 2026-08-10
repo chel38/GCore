@@ -5,7 +5,17 @@ GCIdentityConfig = {
     requiredCoreApi = 1,
     identifierTypes = { 'license', 'license2' },
     storage = {
-        file = 'data/identities.json'
+        adapter = 'oxmysql',
+        legacyFile = 'data/identities.json',
+        importLegacyJson = true
+    },
+    database = {
+        healthAttempts = 5,
+        healthRetryMs = 2000
+    },
+    accounts = {
+        emailMinBytes = 5,
+        emailMaxBytes = 254
     },
     characters = {
         maximum = 3,
@@ -14,12 +24,18 @@ GCIdentityConfig = {
     },
     rateLimits = {
         hello = { maximum = 5, windowMs = 30000 },
+        registration = { maximum = 3, windowMs = 60000 },
         createCharacter = { maximum = 3, windowMs = 60000 },
-        selectCharacter = { maximum = 10, windowMs = 60000 }
+        selectCharacter = { maximum = 10, windowMs = 60000 },
+        exit = { maximum = 2, windowMs = 30000 }
     },
     replayCacheSize = 32,
     clientHello = {
         maximumAttempts = 5,
         retryIntervalMs = 3000
+    },
+    client = {
+        nuiReadyTimeoutMs = 10000,
+        restrictControls = true
     }
 }

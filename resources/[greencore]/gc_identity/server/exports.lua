@@ -1,6 +1,7 @@
 exports('GetIdentityVersion', GCIdentityAPI.GetIdentityVersion)
 exports('GetIdentityApiVersion', GCIdentityAPI.GetIdentityApiVersion)
 exports('GetIdentityProtocolVersion', GCIdentityAPI.GetIdentityProtocolVersion)
+exports('GetIdentityHealth', GCIdentityAPI.GetIdentityHealth)
 exports('IsAuthorized', GCIdentityAPI.IsAuthorized)
 exports('IsIdentityReady', GCIdentityAPI.IsIdentityReady)
 exports('GetIdentityState', GCIdentityAPI.GetIdentityState)

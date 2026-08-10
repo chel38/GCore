@@ -12,6 +12,13 @@ function GCIdentityAPI.GetIdentityProtocolVersion()
     return GCIdentityVersion.protocol
 end
 
+function GCIdentityAPI.GetIdentityHealth()
+    local health = GCIdentityDatabase.GetHealth()
+    health.available = GCIdentityService.IsAvailable()
+    health.storage = GCIdentityRepository.GetAdapterName()
+    return health
+end
+
 function GCIdentityAPI.IsAuthorized(playerSource)
     return GCIdentityStates.IsAuthorized(playerSource)
 end

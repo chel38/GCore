@@ -223,6 +223,36 @@ foreach ($module in $moduleDirectories) {
         }
     }
 
+    if ($moduleName -eq 'gc_identity') {
+        if ($moduleManifest -notmatch '(?m)^\s*dependency\s+[''"]oxmysql[''"]') {
+            Add-Failure "Module gc_identity does not declare dependency 'oxmysql'."
+        }
+
+        if ($moduleManifest -notmatch '@oxmysql/lib/MySQL\.lua') {
+            Add-Failure 'Module gc_identity does not load the oxmysql Lua boundary.'
+        }
+
+        if ($moduleManifest -notmatch '(?m)^\s*ui_page\s+[''"]web/dist/index\.html[''"]') {
+            Add-Failure 'Module gc_identity does not declare its built NUI page.'
+        }
+
+        foreach ($identityPath in @(
+            'server/database.lua',
+            'server/migrations/registry.lua',
+            'server/migrations/001_initial_identity.lua',
+            'server/repositories/oxmysql.lua',
+            'web/package.json',
+            'web/pnpm-lock.yaml',
+            'web/src/main.ts',
+            'web/src/app.test.ts',
+            'web/dist/index.html'
+        )) {
+            if (-not (Test-Path -LiteralPath (Join-Path $module.FullName $identityPath))) {
+                Add-Failure "Module gc_identity is missing $identityPath."
+            }
+        }
+    }
+
     $moduleLuaFiles = Get-ChildItem -LiteralPath $module.FullName -Recurse -Filter '*.lua'
 
     foreach ($moduleLuaFile in $moduleLuaFiles) {
@@ -285,7 +315,7 @@ if ($securityDocument -notmatch 'github\.com/chel38/GCore/security/advisories/ne
 }
 
 $markdownFiles = Get-ChildItem -LiteralPath $repoRoot -Recurse -Filter '*.md' |
-    Where-Object { $_.FullName -notmatch '[\\/](?:server|txData|\.git)[\\/]' }
+    Where-Object { $_.FullName -notmatch '[\\/](?:server|txData|\.git|node_modules)[\\/]' }
 
 foreach ($file in $markdownFiles) {
     $content = Get-Content -LiteralPath $file.FullName -Raw

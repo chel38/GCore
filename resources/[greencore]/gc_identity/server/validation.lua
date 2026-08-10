@@ -40,17 +40,68 @@ local function validateRequestId(requestId)
         and requestId:match('^[A-Za-z0-9_-]+$') ~= nil
 end
 
+local function trim(value)
+    return value:match('^%s*(.-)%s*$')
+end
+
+local function validDomain(domain)
+    if not domain:find('.', 1, true)
+        or domain:find('..', 1, true)
+        or not domain:match('^[a-z0-9.-]+$')
+        or not domain:match('^[a-z0-9]')
+        or not domain:match('[a-z0-9]$') then
+        return false
+    end
+
+    for label in domain:gmatch('[^.]+') do
+        if #label > 63
+            or not label:match('^[a-z0-9]')
+            or not label:match('[a-z0-9]$') then
+            return false
+        end
+    end
+
+    return true
+end
+
+function GCIdentityValidation.NormalizeEmail(value)
+    if type(value) ~= 'string' then
+        return nil
+    end
+
+    local email = trim(value):lower()
+
+    if #email < GCIdentityConfig.accounts.emailMinBytes
+        or #email > GCIdentityConfig.accounts.emailMaxBytes
+        or email:match('[%z\1-\31\127%s]') then
+        return nil
+    end
+
+    local localPart, domain = email:match('^([^@]+)@([^@]+)$')
+
+    if not localPart or #localPart > 64
+        or not localPart:match("^[a-z0-9.!#$%%&'*+/=?^_`{|}~-]+$")
+        or localPart:sub(1, 1) == '.'
+        or localPart:sub(-1) == '.'
+        or localPart:find('..', 1, true)
+        or not validDomain(domain) then
+        return nil
+    end
+
+    return email
+end
+
 local function normalizeName(value)
     if type(value) ~= 'string' then
         return nil
     end
 
-    local normalized = value:match('^%s*(.-)%s*$')
+    local normalized = trim(value)
 
     if #normalized < GCIdentityConfig.characters.nameMinBytes
         or #normalized > GCIdentityConfig.characters.nameMaxBytes
         or normalized:match('[%z\1-\31\127]')
-        or normalized:match('[<>/\\{}%[%]|]') then
+        or normalized:match('[%d<>/\\{}%[%]|@#$%%%^&*=+~`;:!?]') then
         return nil
     end
 
@@ -67,6 +118,36 @@ function GCIdentityValidation.ValidateHello(payload)
     end
 
     return { protocolVersion = payload.protocolVersion }
+end
+
+function GCIdentityValidation.ValidateRegistration(payload)
+    if not exactKeys(payload, {
+        protocolVersion = true,
+        requestId = true,
+        email = true
+    }) then
+        return nil, 'GC-IDENTITY-PAYLOAD-SCHEMA'
+    end
+
+    if not validateProtocol(payload.protocolVersion) then
+        return nil, 'GC-IDENTITY-PROTOCOL-MISMATCH'
+    end
+
+    if not validateRequestId(payload.requestId) then
+        return nil, 'GC-IDENTITY-PAYLOAD-REQUEST-ID'
+    end
+
+    local email = GCIdentityValidation.NormalizeEmail(payload.email)
+
+    if not email then
+        return nil, 'GC-IDENTITY-REGISTRATION-INVALID'
+    end
+
+    return {
+        protocolVersion = payload.protocolVersion,
+        requestId = payload.requestId,
+        email = email
+    }
 end
 
 function GCIdentityValidation.ValidateCreateCharacter(payload)
@@ -91,7 +172,7 @@ function GCIdentityValidation.ValidateCreateCharacter(payload)
     local lastName = normalizeName(payload.lastName)
 
     if not firstName or not lastName then
-        return nil, 'GC-IDENTITY-PAYLOAD-NAME'
+        return nil, 'GC-IDENTITY-CHARACTER-INVALID'
     end
 
     return {
@@ -128,4 +209,16 @@ function GCIdentityValidation.ValidateSelectCharacter(payload)
         requestId = payload.requestId,
         characterId = payload.characterId
     }
+end
+
+function GCIdentityValidation.ValidateExit(payload)
+    if not exactKeys(payload, { protocolVersion = true }) then
+        return nil, 'GC-IDENTITY-PAYLOAD-SCHEMA'
+    end
+
+    if not validateProtocol(payload.protocolVersion) then
+        return nil, 'GC-IDENTITY-PROTOCOL-MISMATCH'
+    end
+
+    return { protocolVersion = payload.protocolVersion }
 end

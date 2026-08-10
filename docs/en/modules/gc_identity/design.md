@@ -1,184 +1,138 @@
-# gc_identity 0.1.0-alpha — design
+# gc_identity 0.2.0-alpha — implemented design
 
-Status: approved MVP design before implementation.
-Module API: 1. Module protocol: 1. Required Core API: 1.
+Status: implemented and validated with automated tests and a one-client real
+FXServer/MariaDB smoke test. Identity API 1 and protocol 1 remain compatible.
 
 ## Responsibility
 
 `gc_core` knows that a network player is connected and spawned. `gc_identity`
-answers a separate question: which server-owned account and character belong to
-that player for this session.
+answers which persisted account and selected character belong to that player.
 
-The MVP owns:
-
-- license-backed account resolution and automatic first account creation;
-- character creation, listing, ownership validation, and selection;
-- an explicit identity state machine;
-- detached Public Account and Character DTOs;
-- a small persistence boundary and a JSON file adapter;
-- its own validation, rate limits, error namespace, and restart recovery.
-
-## Non-responsibility
-
-The module does not own core connection/spawn state, passwords, web login, roles,
-permissions, money, inventory, jobs, admin, NUI, or a general database/ORM. It
-never mutates `gc_core` state and `gc_core` never imports `gc_identity`.
-
-## Dependency and gameplay rule
+The module owns explicit registration, authorization by a trusted server-side
+FiveM identifier, character identity, Public Identity API/DTOs, MariaDB
+persistence, NUI interaction, and its own restart recovery. It does not own core
+lifecycle, gameplay domains, permissions, money, inventory, or a general ORM.
 
 ```text
+FiveM
+  ↓
 gc_core Public API v1
-          ↑
-     gc_identity
+  ↓
+gc_identity service
+  ↓
+repository facade → oxmysql → MariaDB
 ```
 
-Every operation queries current core exports. Bootstrap requires a connected,
-ready player. Character mutation additionally requires
-`CanUseGameplayFeatures(source)`. Core API v1 continues to mean only
-`core state == spawned`; a domain module that needs identity must check both:
+`gc_core` imports no identity code and remains database-independent.
 
-```lua
-exports.gc_core:CanUseGameplayFeatures(source)
-    and exports.gc_identity:IsIdentityReady(source)
-```
+## Authentication and registration
 
-This keeps the dependency one-way and requires no core change.
+The primary credential is a server-captured `license`/`license2` selected through
+`gc_core:GetPlayerIdentifier(source)`. It never comes from a client payload.
+
+An unknown identifier does not create an account. It enters
+`registration_required`; a normalized unique email plus the trusted identifier
+are committed atomically. A returning identifier automatically resolves its
+account. Password authentication is disabled and no password-shaped data is
+accepted or persisted.
 
 ## State machine
 
 ```text
-unknown
-   ↓
-account_required ── create/resolve trusted account ──→ authorized
-                                                        ↓
-                              ┌─ selected character ──→ ready
-                              └─ no selection ────────→ character_required
+uninitialized
+    ↓
+ loading ──────────────→ error
+    ├─ unknown identifier → registration_required → registering
+    │                                          └──→ authorized
+    └─ persisted account ─────────────────────────→ authorized
+                                                     ↓
+                                      character_required
+                                             ↓
+                                      character_selected
+                                             ↓
+                                           ready
 
-any active state ── unrecoverable repository/config failure ──→ error
-disconnect/resource stop ──────────────────────────────────────→ removed
+any active state → disconnecting → runtime session removed
 ```
 
-`authorized` is an explicit account milestone, not a client claim. Transitions
-are performed only by the identity state service. Duplicate hello and replayed
-request IDs are idempotent and cannot create a second account or character.
+All changes use `GCIdentityStates.Transition`; services never assign
+`session.state` directly. Session generation cancels stale database results after
+disconnect or replacement.
 
-## Data model
-
-Internal Account:
+## Server-authoritative flow
 
 ```text
-id, identifierType, identifier, selectedCharacterId, createdAt, updatedAt
+NUI/client request
+  → exact schema + protocol + rate + replay validation
+  → current gc_core lifecycle check
+  → repository transaction / ownership decision
+  → current session generation check
+  → state transition
+  → detached server snapshot
+  → guarded client handler
 ```
 
-Internal Character:
+The client may submit only email, character names, or a character ID. It cannot
+submit trusted identifiers, account ID, authorization state, ownership, or
+database fields.
 
-```text
-id, accountId, firstName, lastName, createdAt, updatedAt
-```
+## Public API v1
 
-The trusted identifier is captured from the server-only core API. It is persisted
-only for lookup, never logged, sent to the client, or included in a Public DTO.
+| Export | Contract |
+| --- | --- |
+| `GetIdentityVersion` | `string` |
+| `GetIdentityApiVersion` | integer `1` |
+| `GetIdentityProtocolVersion` | integer `1` |
+| `GetIdentityHealth` | detached `{ available, repository, database }` DTO |
+| `IsAuthorized` | boolean for a valid current source |
+| `IsIdentityReady` | true only in identity state `ready` |
+| `GetIdentityState` | state string or `nil` |
+| `GetAccount` | detached Account DTO or `nil` |
+| `GetCharacters` | detached Character DTO array |
+| `GetSelectedCharacter` | detached Character DTO or `nil` |
 
-Public Account DTO: `id`, `createdAt`.
-Public Character DTO: `id`, `firstName`, `lastName`, `createdAt`.
+Account DTO contains `id`, `email`, `status`, `createdAt`. Character DTO contains
+`id`, `firstName`, `lastName`, `createdAt`. Identifiers, account ownership keys,
+internal timestamps, SQL metadata, replay/rate state, and mutable references are
+private.
 
-All DTOs are copies. Mutating a returned DTO cannot mutate repository or runtime
-state.
+## Network and NUI contract
 
-## Public server API v1
-
-| Export | Arguments | Return |
+| Event | Direction | Payload |
 | --- | --- | --- |
-| `GetIdentityVersion` | none | resource version string |
-| `GetIdentityApiVersion` | none | integer API version |
-| `GetIdentityProtocolVersion` | none | integer protocol version |
-| `IsAuthorized` | player source | boolean |
-| `IsIdentityReady` | player source | boolean |
-| `GetIdentityState` | player source | state or `nil` |
-| `GetAccount` | player source | detached Account DTO or `nil` |
-| `GetCharacters` | player source | detached Character DTO array |
-| `GetSelectedCharacter` | player source | detached Character DTO or `nil` |
+| `gc_identity:server:hello` | client → server | `{ protocolVersion }` |
+| `gc_identity:server:registerAccount` | client → server | `{ protocolVersion, requestId, email }` |
+| `gc_identity:server:createCharacter` | client → server | `{ protocolVersion, requestId, firstName, lastName }` |
+| `gc_identity:server:selectCharacter` | client → server | `{ protocolVersion, requestId, characterId }` |
+| `gc_identity:server:exit` | client → server | `{ protocolVersion }` |
+| `gc_identity:client:snapshot` | server → client only | Public snapshot |
+| `gc_identity:client:rejected` | server → client only | `{ requestId?, code }` |
 
-No public API mutates identity state in v1.
+Server-only client events require `source == 65535`. NUI callbacks map to these
+requests; local pending state prevents double submit, while authoritative replay
+protection remains server-side.
 
-## Network events
+## Persistence and recovery
 
-Client → server:
+The production adapter is `oxmysql`. The memory adapter exists only for tests;
+the JSON adapter is read-only legacy migration input. Startup is bounded:
+database probe → migrations → repository → optional import → recovery. Any
+failure is explicit degraded state with no fallback.
 
-- `gc_identity:server:hello` — `{ protocolVersion }`;
-- `gc_identity:server:createCharacter` — `{ protocolVersion, requestId,
-  firstName, lastName }`;
-- `gc_identity:server:selectCharacter` — `{ protocolVersion, requestId,
-  characterId }`.
+`restart gc_identity` rebuilds online sessions once and restores persisted
+selection. When `gc_core` is administratively restarted, FiveM stops declared
+dependants; `ensure gc_identity` must follow. Disconnect removes only runtime
+state. Reconnect resolves the same account/selection without duplicate writes.
 
-Server → client only:
+## Security baseline
 
-- `gc_identity:client:snapshot` — current public identity snapshot;
-- `gc_identity:client:rejected` — `{ requestId?, code }`.
+- parameterized runtime SQL and database constraints;
+- transactional registration, character limit, and selection;
+- exact payload schemas and normalized bounded strings;
+- per-source/action rate limits and bounded replay cache;
+- ownership checked in the transaction, never in NUI;
+- server-origin guards and DTO copy isolation;
+- stable diagnostic codes without identifiers, email, or secrets in logs.
 
-Client handlers require FiveM server origin (`source == 65535`). Payload schemas
-reject unknown fields. Requests are rate-limited per source/action. A bounded
-request-result cache makes duplicate request IDs idempotent.
-
-## Persistence model
-
-`GCIdentityRepository` is the only component that reads or writes storage. The
-first adapter uses `LoadResourceFile`/`SaveResourceFile` with
-`data/identities.json`; this keeps the MVP deployable without adding a database
-dependency to either module or core. Runtime services do not call JSON or storage
-natives directly. A future database adapter may replace this boundary without
-changing API v1.
-
-Writes replace the complete small alpha data set and return explicit errors. The
-JSON file is runtime data and is excluded from Git. This adapter is suitable for
-the MVP, not a high-volume production database.
-
-## Restart and recovery
-
-- On `gc_identity` start, persisted data loads before the module becomes ready.
-- The server scans online players once and rebuilds runtime sessions through
-  current core exports.
-- The client sends bounded hello attempts on identity or core resource start.
-- On `gc_core` start, identity re-checks API compatibility and rebuilds all online
-  identity sessions idempotently.
-- FiveM stops declared dependants during `restart gc_core`; the operator then runs
-  `ensure gc_identity`. That start path performs the same bounded online-player
-  recovery and restores the persisted selected character.
-- Disconnect removes runtime state, rate limits, and replay cache; persisted
-  account/characters remain.
-- Every async/recovery path is bounded and cancels when its resource generation
-  is no longer current.
-
-## Security model
-
-- The client never submits an identifier, account ID, ownership result, or
-  authorization state.
-- Account lookup uses `gc_core:GetPlayerIdentifier` on the server.
-- Character selection verifies repository ownership server-side.
-- Character strings have type, byte-length, control-character, and forbidden
-  punctuation checks.
-- Strict payload schemas, protocol checks, rate limits, and request replay
-  handling protect all ingress events.
-- Account enumeration is impossible through Public API because lookups are by
-  current player source only.
-- Passwords do not exist in this MVP. No password or custom hashing scheme is
-  introduced.
-- Logs contain source and stable codes, never identifiers or character secrets.
-
-Threats covered by tests: malformed/oversized input, duplicate requests, replay,
-wrong state, stopped core, rate-limit abuse, foreign character ID, local spoof of
-server-only events, DTO mutation, restart recovery, and disconnect cleanup.
-
-## Failure cases
-
-Stable namespaces include:
-
-- `GC-IDENTITY-CORE-*` for missing/incompatible lifecycle;
-- `GC-IDENTITY-PAYLOAD-*` for schema/type failures;
-- `GC-IDENTITY-RATE-LIMIT` for bounded ingress;
-- `GC-IDENTITY-ACCOUNT-*` and `GC-IDENTITY-CHARACTER-*` for domain failures;
-- `GC-IDENTITY-STORAGE-*` for repository failures;
-- `GC-IDENTITY-PROTOCOL-MISMATCH` and `GC-IDENTITY-SECURITY-*` for trust-boundary failures.
-
-Failures are fail-closed: no state commit is made until validation and required
-persistence succeed.
+See [persistence design](persistence-design.md) and
+[implementation report](implementation-report.md).
