@@ -14,8 +14,8 @@
 ## Ожидаемые сообщения
 
 ```text
-[GreenCore] [INFO] gc_core server bootstrap loaded | version=0.1.4-alpha
-[GreenCore] [INFO] gc_core 0.1.4-alpha started successfully
+[GreenCore] [INFO] gc_core server bootstrap loaded | version=0.1.5-alpha
+[GreenCore] [INFO] gc_core 0.1.5-alpha started successfully
 ```
 
 ## Что происходит при подключении игрока
@@ -65,7 +65,7 @@ print(exports.gc_core:GetVersionString())
 Должно вывестись:
 
 ```text
-0.1.4-alpha
+0.1.5-alpha
 ```
 
 ## Возможные проблемы

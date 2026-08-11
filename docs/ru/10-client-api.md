@@ -48,7 +48,7 @@ end)
 
 ```lua
 {
-    clientVersion = '0.1.4-alpha',
+    clientVersion = '0.1.5-alpha',
     protocolVersion = 1,
     locale = 'ru'
 }

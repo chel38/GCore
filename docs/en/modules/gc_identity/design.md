@@ -1,16 +1,17 @@
-# gc_identity 0.3.0-alpha — implemented design
+# gc_identity 0.4.0-alpha — implemented design
 
-Status: implemented and validated with automated tests and a one-client real
-FXServer/MariaDB smoke test. Identity API 1 remains compatible; protocol 2 adds
-the mandatory email-code and new-IP handshake.
+Status: implemented and validated with automated tests; current runtime results
+are documented separately. Identity API 1 remains compatible; protocol 3 adds
+pre-spawn registered-name/email finalization and the new-IP handshake.
 
 ## Responsibility
 
-`gc_core` knows that a network player is connected and spawned. `gc_identity`
-answers which persisted account and selected character belong to that player.
+`gc_core` owns network lifecycle and waits for a trusted server spawn release in
+manual mode. `gc_identity` resolves account/security before spawn and owns the
+selected character after authoritative spawn confirmation.
 
 The module owns explicit registration, authorization by a trusted server-side
-FiveM identifier, character identity, Public Identity API/DTOs, MariaDB
+FiveM identifier, registered account name, character identity, Public Identity API/DTOs, MariaDB
 persistence, NUI interaction, and its own restart recovery. It does not own core
 lifecycle, gameplay domains, permissions, money, inventory, or a general ORM.
 
@@ -32,9 +33,10 @@ The primary credential is a server-captured `license`/`license2` selected throug
 `gc_core:GetPlayerIdentifier(source)`. It never comes from a client payload.
 
 An unknown identifier does not create an account. It enters
-`registration_required`; submitting a normalized unique email creates a
-DB-backed one-time challenge, not an account. Only a correct server-generated
-code atomically creates/links the account, verifies email, and saves the first
+`registration_required`; submitting a normalized registered name and unique
+email creates a DB-backed one-time challenge, not an account. A correct code
+only marks that challenge verified; explicit finalization atomically
+creates/links the account, stores its name, verifies email, and saves the first
 HMAC IP fingerprint. A returning same-IP identifier authorizes automatically;
 a new observed IP requires another email code. Password authentication is disabled and no password-shaped data is
 accepted or persisted.
@@ -46,11 +48,12 @@ uninitialized
     ↓
  loading ──────────────→ error
     ├─ unknown identifier → registration_required → registering
-    │                       → email_verification_pending → authorized
+    │                       → email_verification_pending → registration_verified
+    │                       → registration_finalizing → authorized → spawn_releasing
     ├─ persisted account + new IP → auth_verification_required → authorized
     └─ persisted account + same IP ────────────────────────────→ authorized
                                                      ↓
-                                      character_required
+                                      post_spawn_identity → character_required
                                              ↓
                                       character_selected
                                              ↓
@@ -76,7 +79,8 @@ NUI/client request
   → guarded client handler
 ```
 
-The client may submit only email, a verification code, character names, or a character ID. It cannot
+The client may submit only registered full name, email, a verification code,
+character names, or a character ID. It cannot
 submit trusted identifiers, account ID, authorization state, ownership, or
 database fields.
 
@@ -86,7 +90,8 @@ database fields.
 | --- | --- |
 | `GetIdentityVersion` | `string` |
 | `GetIdentityApiVersion` | integer `1` |
-| `GetIdentityProtocolVersion` | integer `2` |
+| `GetIdentityProtocolVersion` | integer `3` |
+| `GetDisplayName(source)` | string or nil, copy-safe registered account name |
 | `GetIdentityHealth` | detached `{ available, storage, database, mail }` DTO |
 | `IsAuthorized` | boolean for a valid current source |
 | `IsIdentityReady` | true only in identity state `ready` |
@@ -95,7 +100,8 @@ database fields.
 | `GetCharacters` | detached Character DTO array |
 | `GetSelectedCharacter` | detached Character DTO or `nil` |
 
-Account DTO contains `id`, `email`, `status`, `createdAt`. Character DTO contains
+Account DTO contains `id`, `email`, `firstName`, `lastName`, `displayName`,
+`status`, `createdAt`. Character DTO contains
 `id`, `firstName`, `lastName`, `createdAt`. Identifiers, account ownership keys,
 internal timestamps, SQL metadata, replay/rate state, and mutable references are
 private.
@@ -105,7 +111,10 @@ private.
 | Event | Direction | Payload |
 | --- | --- | --- |
 | `gc_identity:server:hello` | client → server | `{ protocolVersion }` |
-| `gc_identity:server:registerAccount` | client → server | `{ protocolVersion, requestId, email }` |
+| `gc_identity:server:sendRegistrationCode` | client → server | `{ protocolVersion, requestId, fullName, email }` |
+| `gc_identity:server:changeRegistrationEmail` | client → server | `{ protocolVersion, requestId }` |
+| `gc_identity:server:finalizeRegistration` | client → server | `{ protocolVersion, requestId }` |
+| `gc_identity:server:completeProfile` | client → server | `{ protocolVersion, requestId, fullName }` |
 | `gc_identity:server:verifyEmail` | client → server | `{ protocolVersion, requestId, code }` |
 | `gc_identity:server:resendVerification` | client → server | `{ protocolVersion, requestId }` |
 | `gc_identity:server:createCharacter` | client → server | `{ protocolVersion, requestId, firstName, lastName }` |

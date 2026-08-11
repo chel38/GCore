@@ -6,7 +6,7 @@
 GCTest.Register('validation.client_ready.valid', function()
     local payload = {
         clientVersion = '0.1.0',
-        protocolVersion = 1,
+        protocolVersion = GCVersion.GetProtocolVersion(),
         locale = 'ru'
     }
 
@@ -30,7 +30,7 @@ end)
 GCTest.Register('validation.client_ready.invalid_version', function()
     local payload = {
         clientVersion = 123,
-        protocolVersion = 1
+        protocolVersion = GCVersion.GetProtocolVersion()
     }
 
     local isValid, errorCode = GCValidation.ClientReady(payload)
@@ -44,7 +44,7 @@ end)
 GCTest.Register('validation.client_ready.long_version', function()
     local payload = {
         clientVersion = string.rep('a', 33),
-        protocolVersion = 1
+        protocolVersion = GCVersion.GetProtocolVersion()
     }
 
     local isValid, errorCode = GCValidation.ClientReady(payload)
@@ -72,7 +72,7 @@ end)
 GCTest.Register('validation.client_ready.invalid_locale', function()
     local payload = {
         clientVersion = '0.1.0',
-        protocolVersion = 1,
+        protocolVersion = GCVersion.GetProtocolVersion(),
         locale = 42
     }
 

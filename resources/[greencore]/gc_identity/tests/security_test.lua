@@ -38,26 +38,29 @@ end)
 
 GCModuleTest.Register('identity.wrong_core_lifecycle_rejects', 'security', function()
     IdentityTest.Reset()
-    IdentityTest.core.gameplay[34] = false
+    IdentityTest.core.ready[34] = false
     GCIdentityService.Resolve(34)
-    local account, registrationError = GCIdentityService.RegisterAccount(34, {
+    local account, registrationError = GCIdentityService.SendRegistrationCode(34, {
         protocolVersion = GCIdentityVersion.protocol,
         requestId = 'register_3400',
+        firstName = 'Wrong',
+        lastName = 'State',
         email = 'wrong-state@example.test'
     })
     GCModuleTest.ExpectNil(account, 'non-gameplay player cannot register')
     GCModuleTest.ExpectEqual(
         registrationError,
-        'GC-IDENTITY-CORE-GAMEPLAY-NOT-READY',
+        'GC-IDENTITY-CORE-PLAYER-NOT-READY',
         'core lifecycle error is stable'
     )
 end)
 
 GCModuleTest.Register('identity.server_event_rejects_forged_authority_fields', 'security', function()
     IdentityTest.Reset()
-    IdentityTest.EmitNetwork(GCIdentityEvents.server.registerAccount, 35, {
+    IdentityTest.EmitNetwork(GCIdentityEvents.server.sendRegistrationCode, 35, {
         protocolVersion = GCIdentityVersion.protocol,
         requestId = 'register_3500',
+        fullName = 'Forged Player',
         email = 'forged@example.test',
         accountId = 999,
         license = 'license:forged'
@@ -82,9 +85,11 @@ GCModuleTest.Register('identity.disconnect_during_storage_result_is_stale', 'run
     memory.SetBeforeOperation(function()
         GCIdentityService.Disconnect(36)
     end)
-    local account, registrationError = GCIdentityService.RegisterAccount(36, {
+    local account, registrationError = GCIdentityService.SendRegistrationCode(36, {
         protocolVersion = GCIdentityVersion.protocol,
         requestId = 'register_3600',
+        firstName = 'Disconnected',
+        lastName = 'Player',
         email = 'disconnect@example.test'
     })
     GCModuleTest.ExpectNil(account, 'stale registration result is not committed to runtime')
@@ -111,9 +116,11 @@ GCModuleTest.Register('identity.duplicate_email_across_players_is_rejected', 'se
     IdentityTest.Reset()
     IdentityTest.ResolveAndRegister(37, 'shared@example.test', 'register_3700')
     GCIdentityService.Resolve(38)
-    local account, registrationError = GCIdentityService.RegisterAccount(38, {
+    local account, registrationError = GCIdentityService.SendRegistrationCode(38, {
         protocolVersion = GCIdentityVersion.protocol,
         requestId = 'register_3800',
+        firstName = 'Shared',
+        lastName = 'Player',
         email = 'shared@example.test'
     })
     GCModuleTest.ExpectNil(account, 'second account cannot claim same email')

@@ -1,9 +1,8 @@
 # gc_identity email verification and network-risk flow
 
-Version `0.3.0-alpha` keeps Identity API v1 backward-compatible and raises the
-module network protocol to v2. The protocol change is intentional: registration
-is no longer complete after submitting an email; a server-generated one-time
-code is mandatory.
+Version `0.4.0-alpha` keeps Identity API v1 backward-compatible and uses module
+protocol v3. A code verifies email but intentionally creates no account and
+allows no spawn; explicit server-validated finalization is required afterward.
 
 ## Ownership and trust
 
@@ -23,18 +22,20 @@ ownership proof and only decides whether an additional email check is needed.
 ## Registration
 
 ```text
-registration_required -> email submitted -> registering
+registration_required -> registered name + email -> registering
   -> secure 6-digit code from MariaDB RANDOM_BYTES
   -> HMAC digest stored in DB-backed one-time challenge
   -> localhost mail request accepted
   -> email_verification_pending
   -> server validates code, TTL, attempts, binding and current endpoint
+  -> registration_verified (account and spawn still absent)
+  -> explicit finalize revalidates license/IP/name/email/challenge
   -> one transaction consumes challenge, creates account, links license,
      marks email verified and stores first IP fingerprint
-  -> authorized -> character_required/ready
+  -> authorized -> trusted Core spawn release -> post-spawn character flow
 ```
 
-No active account is created before code verification. A code lives for 10
+No active account is created before explicit finalization. A code lives for 10
 minutes, has five attempts, and resend has a 60-second cooldown. Resend consumes
 the previous challenge. All values are configurable in module config; expiry and
 attempts are enforced by the server, not the NUI countdown.
@@ -61,9 +62,9 @@ and new-IP authorization fail closed and remain retryable.
 Identity API v1 returns the same copied Account/Character DTOs and never exposes
 challenge state, code digest, attempts, IP fingerprint, or secrets. NUI snapshots
 may contain only verification type, masked email, `expiresIn`, and `resendIn`.
-The expected code never reaches NUI. New protocol-v2 ingress events are
-`verifyEmail` and `resendVerification`; every payload is exact-schema validated
-and rate-limited.
+The expected code never reaches NUI. Protocol-v3 ingress includes `verifyEmail`,
+`resendVerification`, `changeRegistrationEmail`, and `finalizeRegistration`;
+every payload is exact-schema validated and rate-limited.
 
 See [the mail service README](../../../../mail-service/README.md) for process and
 SMTP setup.

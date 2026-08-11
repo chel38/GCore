@@ -36,7 +36,7 @@ GCModuleTest.Register('identity.migrations_fresh_database_applies_in_order', 'mi
     GCModuleTest.ExpectTrue(initialized, 'fresh database initializes')
     GCModuleTest.ExpectNil(initializeError, 'fresh migration has no error')
     GCModuleTest.ExpectTrue(ddlStatements >= 5, 'migration table and schema statements execute')
-    GCModuleTest.ExpectEqual(inserts, 2, 'both pending migrations are recorded')
+    GCModuleTest.ExpectEqual(inserts, 3, 'all pending migrations are recorded')
     GCModuleTest.ExpectEqual(versions[1], '001_initial_identity', 'initial migration is first')
     GCModuleTest.ExpectEqual(
         versions[2],
@@ -44,8 +44,13 @@ GCModuleTest.Register('identity.migrations_fresh_database_applies_in_order', 'mi
         'verification migration is second'
     )
     GCModuleTest.ExpectEqual(
+        versions[3],
+        '003_pre_spawn_registration',
+        'pre-spawn registration migration is third'
+    )
+    GCModuleTest.ExpectEqual(
         GCIdentityDatabase.GetHealth().appliedMigrations,
-        2,
+        3,
         'health reports applied migration count'
     )
     restoreMemoryDatabase()
@@ -81,7 +86,7 @@ GCModuleTest.Register('identity.migrations_existing_database_applies_only_pendin
         pendingStatements >= 2,
         'pending security DDL statements run without replaying migration 001'
     )
-    GCModuleTest.ExpectEqual(migrationInserts, 1, 'only pending migration is recorded')
+    GCModuleTest.ExpectEqual(migrationInserts, 2, 'only pending migrations are recorded')
     restoreMemoryDatabase()
 end)
 

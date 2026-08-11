@@ -1,16 +1,17 @@
-# gc_identity 0.3.0-alpha — реализованный design
+# gc_identity 0.4.0-alpha — реализованный design
 
-Статус: реализовано и проверено automated tests и реальным smoke-тестом с одним
-FiveM client и MariaDB. Identity API 1 остался совместимым; protocol 2 добавляет
-обязательный email code и new-IP handshake.
+Статус: реализовано и проверено automated tests; актуальный runtime smoke-test
+документируется отдельно. Identity API 1 совместим; protocol 3 добавляет
+pre-spawn registered-name/email finalization и new-IP handshake.
 
 ## Ответственность
 
-`gc_core` знает, что сетевой игрок подключён и заспавнен. `gc_identity`
-определяет, какой persistent account и выбранный character принадлежат игроку.
+`gc_core` знает lifecycle сетевого игрока и в manual mode ждёт доверенный server
+spawn release. `gc_identity` до spawn определяет persistent account/security,
+а после подтверждённого spawn управляет выбранным character.
 
 Модуль владеет явной регистрацией, авторизацией по trusted server-side FiveM
-identifier, character identity, Public Identity API/DTO, MariaDB persistence,
+identifier, registered account name, character identity, Public Identity API/DTO, MariaDB persistence,
 NUI и собственным recovery. Он не владеет core lifecycle, gameplay domains,
 permissions, деньгами, inventory или общей ORM.
 
@@ -33,9 +34,9 @@ Primary credential — server-captured `license`/`license2`, полученны�
 
 Неизвестный identifier не создаёт account автоматически. State становится
 `registration_required`; normalized unique email создаёт DB-backed one-time
-challenge, а не account. Только правильный server-generated code одной
-transaction создаёт/связывает account, подтверждает email и сохраняет первый
-HMAC IP fingerprint. Returning same-IP identifier авторизуется автоматически,
+challenge, а не account. Правильный code лишь помечает challenge verified;
+отдельный finalize одной transaction создаёт/связывает account, сохраняет имя,
+подтверждает email и первый HMAC IP fingerprint. Returning same-IP identifier авторизуется автоматически,
 а новый observed IP требует ещё один email code. Password authentication отключена: данные password-типа не принимаются
 и не сохраняются.
 
@@ -46,11 +47,12 @@ uninitialized
     ↓
  loading ──────────────→ error
     ├─ unknown identifier → registration_required → registering
-    │                       → email_verification_pending → authorized
+    │                       → email_verification_pending → registration_verified
+    │                       → registration_finalizing → authorized → spawn_releasing
     ├─ persisted account + new IP → auth_verification_required → authorized
     └─ persisted account + same IP ────────────────────────────→ authorized
                                                      ↓
-                                      character_required
+                                      post_spawn_identity → character_required
                                              ↓
                                       character_selected
                                              ↓
@@ -76,7 +78,7 @@ NUI/client request
   → guarded client handler
 ```
 
-Клиент передаёт только email, verification code, имена character или character ID. Он не может
+Клиент передаёт только registered full name, email, verification code, имена character или character ID. Он не может
 передать trusted identifier, account ID, authorization state, ownership или DB
 fields.
 
@@ -86,7 +88,8 @@ fields.
 | --- | --- |
 | `GetIdentityVersion` | `string` |
 | `GetIdentityApiVersion` | integer `1` |
-| `GetIdentityProtocolVersion` | integer `2` |
+| `GetIdentityProtocolVersion` | integer `3` |
+| `GetDisplayName(source)` | string или nil, copy-safe registered account name |
 | `GetIdentityHealth` | detached `{ available, storage, database, mail }` DTO |
 | `IsAuthorized` | boolean для valid current source |
 | `IsIdentityReady` | true только в identity state `ready` |
@@ -95,7 +98,8 @@ fields.
 | `GetCharacters` | массив detached Character DTO |
 | `GetSelectedCharacter` | detached Character DTO или `nil` |
 
-Account DTO содержит `id`, `email`, `status`, `createdAt`. Character DTO содержит
+Account DTO содержит `id`, `email`, `firstName`, `lastName`, `displayName`,
+`status`, `createdAt`. Character DTO содержит
 `id`, `firstName`, `lastName`, `createdAt`. Identifiers, ownership keys, internal
 timestamps, SQL metadata, replay/rate state и mutable references остаются private.
 
@@ -104,7 +108,10 @@ timestamps, SQL metadata, replay/rate state и mutable references остаютс
 | Event | Direction | Payload |
 | --- | --- | --- |
 | `gc_identity:server:hello` | client → server | `{ protocolVersion }` |
-| `gc_identity:server:registerAccount` | client → server | `{ protocolVersion, requestId, email }` |
+| `gc_identity:server:sendRegistrationCode` | client → server | `{ protocolVersion, requestId, fullName, email }` |
+| `gc_identity:server:changeRegistrationEmail` | client → server | `{ protocolVersion, requestId }` |
+| `gc_identity:server:finalizeRegistration` | client → server | `{ protocolVersion, requestId }` |
+| `gc_identity:server:completeProfile` | client → server | `{ protocolVersion, requestId, fullName }` |
 | `gc_identity:server:verifyEmail` | client → server | `{ protocolVersion, requestId, code }` |
 | `gc_identity:server:resendVerification` | client → server | `{ protocolVersion, requestId }` |
 | `gc_identity:server:createCharacter` | client → server | `{ protocolVersion, requestId, firstName, lastName }` |

@@ -164,6 +164,11 @@ GCErrors = {
         severity = 'error',
         public = false
     },
+    ['GC-SPAWN-MANUAL-ONLY'] = {
+        localeKey = 'spawn.rejected',
+        severity = 'warn',
+        public = true
+    },
 
     -- RU: Ошибки клиента.
     -- EN: Client errors.

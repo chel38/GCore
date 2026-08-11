@@ -17,31 +17,31 @@ GreenCore — это минимальный модульный движок дл
 Он отвечает за безопасный жизненный цикл игрока:
 
 ```text
-Подключение → Deferrals → Парольная сессия → playerJoining → Готовность клиента →
-Сервер выбирает PED → Спавн → Подтверждение → Отключение
+Подключение → Deferrals → Pending session → Готовность клиента → Pre-spawn identity →
+Server authorization → Сервер выбирает PED → Спавн → Подтверждение → Отключение
 ```
 
 GreenCore is a minimal modular engine for FiveM written entirely in Lua.
 It handles the secure player lifecycle:
 
 ```text
-Connection → Deferrals → Pending session → playerJoining → Client readiness →
-Server picks PED → Spawn → Confirmation → Disconnection
+Connection → Deferrals → Pending session → Client readiness → Pre-spawn identity →
+Server authorization → Server picks PED → Spawn → Confirmation → Disconnection
 ```
 
 ## Статус разработки / Development status
 
-**0.1.4-alpha** — исправление client loading lifecycle / client loading lifecycle fix.
+**0.1.5-alpha** — secure pre-spawn authorization and manual spawn gate.
 
-Core Resource Version: `0.1.4-alpha`
+Core Resource Version: `0.1.5-alpha`
 
 Core API Version: `1`
 
-Network Protocol Version: `1`
+Network Protocol Version: `2`
 
 Core API Status: **Stable for module development**
 
-Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.3.0-alpha`, local `mail-service 0.1.0-alpha`.
+Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.4.0-alpha`, local `mail-service 0.1.0-alpha`.
 
 ## Возможности версии / Version features
 
@@ -93,6 +93,7 @@ Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.3.0-alpha`, local `ma
 
 ```cfg
 set mysql_connection_string "mysql://USER:PASSWORD@127.0.0.1:3306/gcore?charset=utf8mb4"
+set gcore_spawn_mode manual
 ensure oxmysql
 ensure gc_core
 ensure gc_example
@@ -104,7 +105,7 @@ ensure gc_identity
 8. Найдите сообщение / Look for the message:
 
 ```text
-[GreenCore] [INFO] gc_core 0.1.4-alpha started successfully (recovered N players)
+[GreenCore] [INFO] gc_core 0.1.5-alpha started successfully (recovered N players)
 ```
 
 ## Конфигурация / Configuration
@@ -129,8 +130,9 @@ resources/[greencore]/
 | ------------------------ | -------------- | ------------------------- |
 | `GetApiVersion`          | number         | Версия API                |
 | `GetProtocolVersion`     | number         | Версия протокола          |
+| `GetSpawnMode`           | string         | `automatic` или `manual`  |
 | `GetVersion`             | table          | Версия `gc_core`          |
-| `GetVersionString`       | string         | `0.1.4-alpha`             |
+| `GetVersionString`       | string         | `0.1.5-alpha`             |
 | `IsPlayerConnected`      | boolean        | Проверяет сессию          |
 | `IsPlayerReady`          | boolean        | Проверяет готовность      |
 | `IsPlayerSpawned`        | boolean        | Проверяет спавн           |
@@ -156,6 +158,7 @@ timestamps, lastPed и locale. Внутренние identifiers, spawn decision 
 - [Контракт модулей](docs/ru/module-contract.md) / [Module Contract](docs/en/module-contract.md)
 - [Зависимости модулей](docs/ru/module-dependencies.md) / [Module dependencies](docs/en/module-dependencies.md)
 - [gc_identity design RU](docs/ru/modules/gc_identity/design.md) / [EN](docs/en/modules/gc_identity/design.md)
+- [Pre-spawn регистрация](docs/ru/modules/gc_identity/pre-spawn-registration.md) / [Pre-spawn registration](docs/en/modules/gc_identity/pre-spawn-registration.md)
 - [Аудит NUI lifecycle](docs/ru/modules/gc_identity/nui-lifecycle-audit.md) / [NUI lifecycle audit](docs/en/modules/gc_identity/nui-lifecycle-audit.md)
 - [Persistent identity report RU](docs/ru/modules/gc_identity/implementation-report.md) / [EN](docs/en/modules/gc_identity/implementation-report.md)
 - [Email verification RU](docs/ru/modules/gc_identity/email-verification.md) / [EN](docs/en/modules/gc_identity/email-verification.md)

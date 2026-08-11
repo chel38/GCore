@@ -8,7 +8,8 @@ local identityExports = {
     'GetIdentityState',
     'GetAccount',
     'GetCharacters',
-    'GetSelectedCharacter'
+    'GetSelectedCharacter',
+    'GetDisplayName'
 }
 
 GCModuleTest.Register('identity.api_v1_contract_exists', 'contract', function()
@@ -19,9 +20,9 @@ GCModuleTest.Register('identity.api_v1_contract_exists', 'contract', function()
             exportName .. ' export exists'
         )
     end
-    GCModuleTest.ExpectEqual(GCIdentityAPI.GetIdentityVersion(), '0.3.0-alpha', 'resource version updated')
+    GCModuleTest.ExpectEqual(GCIdentityAPI.GetIdentityVersion(), '0.4.0-alpha', 'resource version updated')
     GCModuleTest.ExpectEqual(GCIdentityAPI.GetIdentityApiVersion(), 1, 'API version remains backward-compatible')
-    GCModuleTest.ExpectEqual(GCIdentityAPI.GetIdentityProtocolVersion(), 2, 'verification protocol is v2')
+    GCModuleTest.ExpectEqual(GCIdentityAPI.GetIdentityProtocolVersion(), 3, 'pre-spawn protocol is v3')
 end)
 
 GCModuleTest.Register('identity.api_dto_isolation', 'contract', function()
@@ -42,12 +43,14 @@ GCModuleTest.Register('identity.api_dto_isolation', 'contract', function()
     local accountDto = GCIdentityAPI.GetAccount(41)
     local characterDto = GCIdentityAPI.GetSelectedCharacter(41)
     local charactersDto = GCIdentityAPI.GetCharacters(41)
+    local displayName = GCIdentityAPI.GetDisplayName(41)
     accountDto.id = 999
     accountDto.email = 'hack@example.test'
     characterDto.firstName = 'HACK'
     charactersDto[1].lastName = 'HACK'
 
     GCModuleTest.ExpectEqual(GCIdentityAPI.GetAccount(41).id, 1, 'account ID mutation is isolated')
+    GCModuleTest.ExpectEqual(displayName, 'Test Player', 'registered account display name is public')
     GCModuleTest.ExpectEqual(
         GCIdentityAPI.GetAccount(41).email,
         'public@example.test',
@@ -90,4 +93,5 @@ GCModuleTest.Register('identity.api_invalid_source_contract', 'contract', functi
     GCModuleTest.ExpectNil(GCIdentityAPI.GetAccount(nil), 'invalid source account is nil')
     GCModuleTest.ExpectEqual(#GCIdentityAPI.GetCharacters(nil), 0, 'invalid source character list is empty')
     GCModuleTest.ExpectNil(GCIdentityAPI.GetSelectedCharacter(nil), 'invalid selected character is nil')
+    GCModuleTest.ExpectNil(GCIdentityAPI.GetDisplayName(nil), 'invalid display name source is nil')
 end)

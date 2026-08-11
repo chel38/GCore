@@ -5,11 +5,11 @@ GCVersion = {
     resource = {
         major = 0,
         minor = 1,
-        patch = 4,
+        patch = 5,
         prerelease = 'alpha'
     },
     api = 1,
-    protocol = 1
+    protocol = 2
 }
 
 function GCVersion.GetString()

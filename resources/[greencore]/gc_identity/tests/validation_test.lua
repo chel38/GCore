@@ -4,6 +4,7 @@ GCModuleTest.Register('identity.validation_valid_payloads', 'unit', function()
     local registration = GCIdentityValidation.ValidateRegistration({
         protocolVersion = GCIdentityVersion.protocol,
         requestId = 'request_0000',
+        fullName = '  Player Name ',
         email = '  Player.Name@Example.COM '
     })
     local create = GCIdentityValidation.ValidateCreateCharacter({
@@ -18,6 +19,11 @@ GCModuleTest.Register('identity.validation_valid_payloads', 'unit', function()
         characterId = 1
     })
     GCModuleTest.ExpectNotNil(hello, 'hello schema accepted')
+    GCModuleTest.ExpectEqual(
+        registration.displayName,
+        'Player Name',
+        'registered name normalized deterministically'
+    )
     GCModuleTest.ExpectEqual(
         registration.email,
         'player.name@example.com',
@@ -38,6 +44,7 @@ GCModuleTest.Register('identity.validation_rejects_malformed', 'security', funct
     local _, emailError = GCIdentityValidation.ValidateRegistration({
         protocolVersion = GCIdentityVersion.protocol,
         requestId = 'request_0003',
+        fullName = 'Valid Name',
         email = "victim@example.com' OR 1=1"
     })
     local _, nameError = GCIdentityValidation.ValidateCreateCharacter({

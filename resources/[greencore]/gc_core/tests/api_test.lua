@@ -6,6 +6,7 @@ local apiMethods = {
     'GetVersionString',
     'GetApiVersion',
     'GetProtocolVersion',
+    'GetSpawnMode',
     'IsPlayerConnected',
     'IsPlayerReady',
     'IsPlayerSpawned',
@@ -54,6 +55,15 @@ GCTest.Register('api.v1_all_methods_exist', function()
     for _, methodName in ipairs(apiMethods) do
         GCTest.ExpectEqual(type(GCAPI[methodName]), 'function', methodName .. ' exists in API v1')
     end
+end, 'contract')
+
+GCTest.Register('api.spawn_mode_contract', function()
+    local previousMode = GCConfig.Spawn.mode
+    GCConfig.Spawn.mode = 'automatic'
+    GCTest.ExpectEqual(GCAPI.GetSpawnMode(), 'automatic', 'standalone mode is public')
+    GCConfig.Spawn.mode = 'manual'
+    GCTest.ExpectEqual(GCAPI.GetSpawnMode(), 'manual', 'module-gated mode is public')
+    GCConfig.Spawn.mode = previousMode
 end, 'contract')
 
 GCTest.Register('api.version_contract', function()

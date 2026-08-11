@@ -1,5 +1,5 @@
--- RU: Реестр публичных сетевых событий протокола v1.
--- EN: Registry of public network events for protocol v1.
+-- RU: Реестр публичных сетевых событий протокола v2 и server-local hooks.
+-- EN: Registry of public protocol v2 network events and server-local hooks.
 
 GCEvents = {
     Server = {
@@ -16,5 +16,8 @@ GCEvents = {
         spawnConfirmed = 'gc_core:client:spawnConfirmed',
         forceResync = 'gc_core:client:forceResync',
         notify = 'gc_core:client:notify'
+    },
+    Hooks = {
+        playerSpawned = 'gc_core:hook:playerSpawned'
     }
 }

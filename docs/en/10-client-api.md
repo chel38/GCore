@@ -49,7 +49,7 @@ events and earlier lifecycle stages cannot dismiss `Awaiting scripts`.
 
 ```lua
 {
-    clientVersion = '0.1.4-alpha',
+    clientVersion = '0.1.5-alpha',
     protocolVersion = 1,
     locale = 'ru'
 }

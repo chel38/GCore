@@ -40,6 +40,17 @@ RegisterNetEvent(GCEvents.Server.requestSpawn, function(payload)
         return
     end
 
+    if GCSpawnPolicy.IsManual() then
+        GCLogger.Warn('GC-SPAWN-MANUAL-ONLY', 'Client spawn request rejected by manual policy', {
+            source = playerSource
+        })
+        TriggerClientEvent(GCEvents.Client.spawnRejected, playerSource, {
+            errorCode = 'GC-SPAWN-MANUAL-ONLY',
+            retryable = false
+        })
+        return
+    end
+
     local decision, errorCode = GCSpawn.Request(playerSource)
 
     if not decision then

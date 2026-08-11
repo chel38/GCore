@@ -104,10 +104,20 @@ function GCIdentityRepository.InvalidateVerificationChallenge(challengeId)
     return call('InvalidateVerificationChallenge', challengeId)
 end
 
+function GCIdentityRepository.MarkVerificationChallengeVerified(challengeId)
+    return call('MarkVerificationChallengeVerified', challengeId)
+end
+
+function GCIdentityRepository.UpdateAccountRegisteredName(accountId, firstName, lastName)
+    return call('UpdateAccountRegisteredName', accountId, firstName, lastName)
+end
+
 function GCIdentityRepository.CompleteVerifiedRegistration(
     challengeId,
     accountId,
     email,
+    firstName,
+    lastName,
     identifierType,
     identifier,
     ipFingerprint
@@ -117,6 +127,8 @@ function GCIdentityRepository.CompleteVerifiedRegistration(
         challengeId,
         accountId,
         email,
+        firstName,
+        lastName,
         identifierType,
         identifier,
         ipFingerprint

@@ -25,7 +25,11 @@ GCIdentityConfig = {
     },
     accounts = {
         emailMinBytes = 5,
-        emailMaxBytes = 254
+        emailMaxBytes = 254,
+        firstNameMinBytes = 2,
+        firstNameMaxBytes = 32,
+        lastNameMinBytes = 2,
+        lastNameMaxBytes = 32
     },
     characters = {
         maximum = 3,
@@ -37,6 +41,9 @@ GCIdentityConfig = {
         registration = { maximum = 3, windowMs = 60000 },
         verifyEmail = { maximum = 8, windowMs = 60000 },
         resendVerification = { maximum = 3, windowMs = 60000 },
+        changeRegistrationEmail = { maximum = 3, windowMs = 60000 },
+        finalizeRegistration = { maximum = 3, windowMs = 60000 },
+        completeProfile = { maximum = 3, windowMs = 60000 },
         createCharacter = { maximum = 3, windowMs = 60000 },
         selectCharacter = { maximum = 10, windowMs = 60000 },
         clientFailure = { maximum = 2, windowMs = 30000 },

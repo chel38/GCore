@@ -17,22 +17,23 @@ GreenCore is a minimal modular engine for FiveM written entirely in Lua 5.4.
 It handles the secure player lifecycle:
 
 ```text
-Connection → Validation → Session → Client readiness → Spawn → Confirmation → Disconnection
+Connection → Validation → Session → Client readiness → Pre-spawn identity →
+Server authorization → Spawn → Confirmation → Disconnection
 ```
 
 ## Development status
 
-**0.1.4-alpha** — client loading lifecycle fix.
+**0.1.5-alpha** — secure pre-spawn authorization and manual spawn gate.
 
-Core Resource Version: `0.1.4-alpha`
+Core Resource Version: `0.1.5-alpha`
 
 Core API Version: `1`
 
-Network Protocol Version: `1`
+Network Protocol Version: `2`
 
 Core API Status: **Stable for module development**
 
-Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.2.1-alpha`.
+Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.4.0-alpha`, local `mail-service 0.1.0-alpha`.
 
 ## Version features
 
@@ -82,6 +83,7 @@ The first version does **not** include:
 
 ```cfg
 set mysql_connection_string "mysql://USER:PASSWORD@127.0.0.1:3306/gcore?charset=utf8mb4"
+set gcore_spawn_mode manual
 ensure oxmysql
 ensure gc_core
 ensure gc_example
@@ -93,7 +95,7 @@ ensure gc_identity
 8. Look for the message:
 
 ```text
-[GreenCore] [INFO] gc_core 0.1.4-alpha started successfully
+[GreenCore] [INFO] gc_core 0.1.5-alpha started successfully
 ```
 
 ## Configuration
@@ -117,8 +119,9 @@ Server exports:
 | ------------------------ | -------------- | ------------------------- |
 | `GetApiVersion`          | number         | API version               |
 | `GetProtocolVersion`     | number         | Protocol version          |
+| `GetSpawnMode`           | string         | `automatic` or `manual`   |
 | `GetVersion`             | table          | `gc_core` version         |
-| `GetVersionString`       | string         | `0.1.4-alpha`             |
+| `GetVersionString`       | string         | `0.1.5-alpha`             |
 | `IsPlayerConnected`      | boolean        | Checks session            |
 | `IsPlayerReady`          | boolean        | Checks readiness          |
 | `IsPlayerSpawned`        | boolean        | Checks spawn              |
@@ -140,6 +143,7 @@ Server exports:
 - [Module Contract v1](docs/en/module-contract.md)
 - [Module dependency graph](docs/en/module-dependencies.md)
 - [gc_identity design](docs/en/modules/gc_identity/design.md)
+- [Pre-spawn registration and secure authorization](docs/en/modules/gc_identity/pre-spawn-registration.md)
 - [gc_identity NUI lifecycle audit](docs/en/modules/gc_identity/nui-lifecycle-audit.md)
 - [Persistent identity implementation report](docs/en/modules/gc_identity/implementation-report.md)
 - [Module ecosystem stage report](docs/en/module-ecosystem-report.md)

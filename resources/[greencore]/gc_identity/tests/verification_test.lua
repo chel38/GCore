@@ -2,6 +2,8 @@ local function registrationPayload(source, email, suffix)
     return {
         protocolVersion = GCIdentityVersion.protocol,
         requestId = ('register_%d_%s'):format(source, suffix or 'request'),
+        firstName = 'Verified',
+        lastName = 'Player',
         email = email
     }
 end
@@ -58,7 +60,7 @@ end)
 GCModuleTest.Register('identity.registration_requires_correct_one_time_code', 'integration', function()
     local memory = IdentityTest.Reset()
     GCIdentityService.Resolve(71)
-    local pending, registrationError = GCIdentityService.RegisterAccount(
+    local pending, registrationError = GCIdentityService.SendRegistrationCode(
         71,
         registrationPayload(71, 'verified@example.test')
     )
@@ -80,13 +82,21 @@ GCModuleTest.Register('identity.registration_requires_correct_one_time_code', 'i
     GCModuleTest.ExpectEqual(codeError, 'GC-IDENTITY-EMAIL-CODE-INVALID', 'wrong code is stable')
     GCModuleTest.ExpectEqual(memory.GetCounts().accounts, 0, 'wrong code creates no account')
 
-    local account, verifyError = GCIdentityService.VerifyEmailCode(
+    local verified, verifyError = GCIdentityService.VerifyEmailCode(
         71,
         verificationPayload(71, expectedCode, 'correct')
     )
     GCModuleTest.ExpectNil(verifyError, 'correct code verifies registration')
-    GCModuleTest.ExpectEqual(account.email, 'verified@example.test', 'verified account is created')
-    GCModuleTest.ExpectTrue(GCIdentityStates.IsAuthorized(71), 'correct code authorizes identity')
+    GCModuleTest.ExpectTrue(verified.verified, 'correct code only verifies the pending email')
+    GCModuleTest.ExpectEqual(memory.GetCounts().accounts, 0, 'verification alone creates no account')
+    GCModuleTest.ExpectFalse(GCIdentityStates.IsAuthorized(71), 'verification alone does not authorize')
+    local account, finalizeError = GCIdentityService.FinalizeRegistration(71, {
+        protocolVersion = GCIdentityVersion.protocol,
+        requestId = 'finalize_71_request'
+    })
+    GCModuleTest.ExpectNil(finalizeError, 'explicit finalization creates the account')
+    GCModuleTest.ExpectNotNil(account, 'finalization returns a lifecycle snapshot')
+    GCModuleTest.ExpectTrue(GCIdentityStates.IsAuthorized(71), 'finalization authorizes identity')
 
     local replayed, replayError = GCIdentityService.VerifyEmailCode(
         71,
@@ -99,7 +109,7 @@ end)
 GCModuleTest.Register('identity.verification_expiry_and_attempt_limit_fail_closed', 'security', function()
     local memory = IdentityTest.Reset()
     GCIdentityService.Resolve(72)
-    GCIdentityService.RegisterAccount(72, registrationPayload(72, 'expiry@example.test'))
+    GCIdentityService.SendRegistrationCode(72, registrationPayload(72, 'expiry@example.test'))
     memory.SetLastChallengeExpires(os.time() - 1)
     local _, expiredError = GCIdentityService.VerifyEmailCode(
         72,
@@ -110,7 +120,7 @@ GCModuleTest.Register('identity.verification_expiry_and_attempt_limit_fail_close
 
     IdentityTest.Reset()
     GCIdentityService.Resolve(73)
-    GCIdentityService.RegisterAccount(73, registrationPayload(73, 'attempts@example.test'))
+    GCIdentityService.SendRegistrationCode(73, registrationPayload(73, 'attempts@example.test'))
     for attempt = 1, GCIdentityConfig.verification.maximumAttempts do
         local _, attemptError = GCIdentityService.VerifyEmailCode(
             73,
@@ -127,7 +137,7 @@ end)
 GCModuleTest.Register('identity.resend_invalidates_previous_code', 'security', function()
     IdentityTest.Reset()
     GCIdentityService.Resolve(74)
-    GCIdentityService.RegisterAccount(74, registrationPayload(74, 'resend@example.test'))
+    GCIdentityService.SendRegistrationCode(74, registrationPayload(74, 'resend@example.test'))
     local oldCode = IdentityTest.LastMailPayload().code
     local previousCooldown = GCIdentityConfig.verification.resendCooldownSeconds
     GCIdentityConfig.verification.resendCooldownSeconds = 0
@@ -146,12 +156,17 @@ GCModuleTest.Register('identity.resend_invalidates_previous_code', 'security', f
         verificationPayload(74, oldCode, 'old')
     )
     GCModuleTest.ExpectEqual(oldError, 'GC-IDENTITY-EMAIL-CODE-INVALID', 'old code is invalid')
-    local account, newError = GCIdentityService.VerifyEmailCode(
+    local verified, newError = GCIdentityService.VerifyEmailCode(
         74,
         verificationPayload(74, newCode, 'new')
     )
     GCModuleTest.ExpectNil(newError, 'new code succeeds')
-    GCModuleTest.ExpectNotNil(account, 'new code creates account')
+    GCModuleTest.ExpectTrue(verified.verified, 'new code verifies the pending registration')
+    GCModuleTest.ExpectEqual(
+        GCIdentityRepository.TestAdapter().GetCounts().accounts,
+        0,
+        'resend verification still does not create an account'
+    )
 end)
 
 GCModuleTest.Register('identity.same_ip_auto_auth_new_ip_requires_code', 'integration', function()
@@ -192,7 +207,7 @@ GCModuleTest.Register('identity.mail_failure_policy_is_fail_closed', 'security',
     local memory = IdentityTest.Reset()
     IdentityTest.SetMailResponse({ status = 502, body = '{}' })
     GCIdentityService.Resolve(76)
-    GCIdentityService.RegisterAccount(76, registrationPayload(76, 'maildown@example.test'))
+    GCIdentityService.SendRegistrationCode(76, registrationPayload(76, 'maildown@example.test'))
     GCModuleTest.ExpectFalse(GCIdentityStates.IsAuthorized(76), 'mail failure blocks registration')
     GCModuleTest.ExpectEqual(memory.GetCounts().accounts, 0, 'mail failure creates no account')
 
@@ -213,7 +228,7 @@ GCModuleTest.Register('identity.mail_timeout_is_bounded', 'runtime', function()
     local memory = IdentityTest.Reset()
     IdentityTest.SetMailResponse({ timeout = true })
     GCIdentityService.Resolve(78)
-    GCIdentityService.RegisterAccount(78, registrationPayload(78, 'timeout@example.test'))
+    GCIdentityService.SendRegistrationCode(78, registrationPayload(78, 'timeout@example.test'))
     GCModuleTest.ExpectEqual(
         GCIdentityService.GetSnapshot(78).state,
         'registering',
@@ -231,7 +246,7 @@ end)
 GCModuleTest.Register('identity.verification_snapshot_and_api_hide_secrets', 'contract', function()
     local memory = IdentityTest.Reset()
     GCIdentityService.Resolve(79)
-    GCIdentityService.RegisterAccount(79, registrationPayload(79, 'privacy@example.test'))
+    GCIdentityService.SendRegistrationCode(79, registrationPayload(79, 'privacy@example.test'))
     local snapshot = GCIdentityService.GetSnapshot(79)
     local challenge = memory.GetLastChallenge()
     GCModuleTest.ExpectEqual(snapshot.verification.maskedEmail, 'p***@example.test', 'NUI sees masked email')

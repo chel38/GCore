@@ -21,9 +21,13 @@ GCClientSecurity.RegisterServerEvent(GCEvents.Client.connectionAccepted, functio
     -- EN: Set the connection acceptance flag.
     GCClientState.SetConnectionAccepted(true)
 
-    -- RU: Запрашиваем спавн у сервера.
-    -- EN: Request a spawn from the server.
-    TriggerServerEvent(GCEvents.Server.requestSpawn, {})
+    -- RU: В manual mode клиент не имеет права инициировать spawn. Фактический
+    -- RU: server handler также запрещает обход модифицированным клиентом.
+    -- EN: In manual mode the client may not initiate spawn. The server handler
+    -- EN: also blocks modified-client bypasses.
+    if payload.spawnMode == 'automatic' then
+        TriggerServerEvent(GCEvents.Server.requestSpawn, {})
+    end
 end)
 
 -- RU: Обработчик одобрения спавна.

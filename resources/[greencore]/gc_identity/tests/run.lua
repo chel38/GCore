@@ -44,11 +44,33 @@ local core = {
     connected = {},
     ready = {},
     gameplay = {},
-    identifiers = {}
+    identifiers = {},
+    spawned = {},
+    spawnRequests = {}
 }
 
 function core:GetApiVersion()
     return self.apiVersion
+end
+
+function core:GetSpawnMode()
+    return 'manual'
+end
+
+function core:GetPlayerSession()
+    return { locale = 'ru' }
+end
+
+function core:IsPlayerSpawned(playerSource)
+    return self.spawned[playerSource] == true
+end
+
+function core:RequestPlayerSpawn(playerSource)
+    if self.connected[playerSource] == false or self.ready[playerSource] == false then
+        return nil, 'GC-SPAWN-API-STATE'
+    end
+    self.spawnRequests[playerSource] = (self.spawnRequests[playerSource] or 0) + 1
+    return { decisionId = ('test-spawn-%d'):format(playerSource) }
 end
 
 function core:IsPlayerConnected(playerSource)
@@ -282,6 +304,8 @@ function IdentityTest.Reset(resetData)
     core.ready = {}
     core.gameplay = {}
     core.identifiers = {}
+    core.spawned = {}
+    core.spawnRequests = {}
     GCIdentityStates.ClearAll()
     GCIdentityRateLimit.ClearAll()
     return useMemoryRepository(resetData ~= false)
@@ -389,6 +413,12 @@ function IdentityTest.ReloadClient()
     GCModuleTest.Load('client/main.lua')
 end
 
+function IdentityTest.CompleteCoreSpawn(playerSource)
+    core.spawned[playerSource] = true
+    core.gameplay[playerSource] = true
+    return GCIdentityService.HandleCoreSpawned(playerSource)
+end
+
 function IdentityTest.ResolveAndRegister(playerSource, email, requestId)
     local snapshot, resolveError = GCIdentityService.Resolve(playerSource)
 
@@ -397,9 +427,11 @@ function IdentityTest.ResolveAndRegister(playerSource, email, requestId)
     end
 
     if snapshot.state == 'registration_required' then
-        local _, registrationError = GCIdentityService.RegisterAccount(playerSource, {
+        local _, registrationError = GCIdentityService.SendRegistrationCode(playerSource, {
             protocolVersion = GCIdentityVersion.protocol,
             requestId = requestId or ('register_%04d'):format(playerSource),
+            firstName = 'Test',
+            lastName = 'Player',
             email = email or ('player%d@example.test'):format(playerSource)
         })
 
@@ -418,8 +450,20 @@ function IdentityTest.ResolveAndRegister(playerSource, email, requestId)
             if verificationError then
                 return nil, verificationError
             end
+            local _, finalizeError = GCIdentityService.FinalizeRegistration(playerSource, {
+                protocolVersion = GCIdentityVersion.protocol,
+                requestId = (requestId or ('register_%04d'):format(playerSource)) .. '_finalize'
+            })
+            if finalizeError then
+                return nil, finalizeError
+            end
             snapshot = GCIdentityService.GetSnapshot(playerSource)
+            if snapshot and snapshot.state == 'spawn_releasing' then
+                snapshot = IdentityTest.CompleteCoreSpawn(playerSource)
+            end
         end
+    elseif snapshot.state == 'spawn_releasing' then
+        snapshot = IdentityTest.CompleteCoreSpawn(playerSource)
     end
 
     return snapshot
@@ -450,6 +494,7 @@ for _, fileName in ipairs({
     'server/migrations/registry.lua',
     'server/migrations/001_initial_identity.lua',
     'server/migrations/002_email_verification_security.lua',
+    'server/migrations/003_pre_spawn_registration.lua',
     'server/database.lua',
     'server/repositories/memory.lua',
     'server/repositories/json_legacy.lua',
@@ -470,6 +515,7 @@ for _, fileName in ipairs({
     'tests/validation_test.lua',
     'tests/repository_test.lua',
     'tests/service_test.lua',
+    'tests/pre_spawn_test.lua',
     'tests/verification_test.lua',
     'tests/security_test.lua',
     'tests/api_test.lua',

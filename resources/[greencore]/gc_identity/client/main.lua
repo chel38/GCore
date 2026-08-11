@@ -9,6 +9,8 @@ local clientFailureReported = false
 local restrictionGeneration = 0
 local nuiWatchGeneration = 0
 local pendingRequests = {}
+local loadingScreenHandedOff = false
+local debugLog
 
 local validStates = {
     uninitialized = true,
@@ -16,8 +18,13 @@ local validStates = {
     registration_required = true,
     registering = true,
     email_verification_pending = true,
+    registration_verified = true,
+    registration_finalizing = true,
+    profile_completion_required = true,
     auth_verification_required = true,
     authorized = true,
+    spawn_releasing = true,
+    post_spawn_identity = true,
     character_required = true,
     character_selected = true,
     ready = true,
@@ -37,6 +44,7 @@ local function validSnapshot(payload)
     if type(payload) ~= 'table'
         or payload.protocolVersion ~= GCIdentityVersion.protocol
         or type(payload.state) ~= 'string'
+        or (payload.locale ~= 'ru' and payload.locale ~= 'en')
         or not validStates[payload.state]
         or type(payload.characters) ~= 'table'
         or type(payload.limits) ~= 'table'
@@ -49,6 +57,9 @@ local function validSnapshot(payload)
         type(payload.account) ~= 'table'
         or type(payload.account.id) ~= 'number'
         or type(payload.account.email) ~= 'string'
+        or type(payload.account.firstName) ~= 'string'
+        or type(payload.account.lastName) ~= 'string'
+        or type(payload.account.displayName) ~= 'string'
         or type(payload.account.status) ~= 'string'
         or type(payload.account.createdAt) ~= 'number'
     ) then
@@ -72,8 +83,33 @@ local function validSnapshot(payload)
         return false
     end
 
+    if payload.registration ~= nil and (
+        type(payload.registration) ~= 'table'
+        or type(payload.registration.fullName) ~= 'string'
+        or type(payload.registration.email) ~= 'string'
+        or type(payload.registration.emailVerified) ~= 'boolean'
+        or type(payload.registration.profileOnly) ~= 'boolean'
+    ) then
+        return false
+    end
+
     return payload.selectedCharacter == nil
         or validPublicCharacter(payload.selectedCharacter)
+end
+
+local function handoffLoadingScreen()
+    if loadingScreenHandedOff then
+        return
+    end
+
+    loadingScreenHandedOff = true
+    if type(ShutdownLoadingScreen) == 'function' then
+        ShutdownLoadingScreen()
+    end
+    if type(ShutdownLoadingScreenNui) == 'function' then
+        ShutdownLoadingScreenNui()
+    end
+    debugLog('FiveM loading screen handed off to identity NUI')
 end
 
 local function nextRequestId()
@@ -81,7 +117,7 @@ local function nextRequestId()
     return ('identity_%d_%d'):format(GetGameTimer(), requestSequence)
 end
 
-local function debugLog(message)
+debugLog = function(message)
     if GCIdentityConfig.client.debug then
         print(('[GC][IDENTITY][CLIENT] %s'):format(message))
     end
@@ -143,6 +179,7 @@ local function applySnapshot(payload)
     -- RU: Focus выдаётся только после JS-ready callback. Загруженный HTML ещё не
     -- доказывает, что NUI bundle умеет отрисоваться и отвечать на callbacks.
     if uiReady then
+        handoffLoadingScreen()
         setRestricted(payload.state ~= 'ready')
     else
         setRestricted(false)
@@ -280,6 +317,7 @@ RegisterNUICallback(GCIdentityNuiCallbacks.ready, function(_, callback)
     nuiWatchGeneration = nuiWatchGeneration + 1
 
     if currentSnapshot then
+        handoffLoadingScreen()
         setRestricted(currentSnapshot.state ~= 'ready')
     elseif uiFailure then
         setRestricted(true)
@@ -290,11 +328,41 @@ RegisterNUICallback(GCIdentityNuiCallbacks.ready, function(_, callback)
     callback({ ok = true })
 end)
 
-RegisterNUICallback(GCIdentityNuiCallbacks.registerAccount, function(data, callback)
+RegisterNUICallback(GCIdentityNuiCallbacks.sendRegistrationCode, function(data, callback)
     local requestId, requestError = beginRequest(
         'registration',
-        GCIdentityEvents.server.registerAccount,
-        { email = type(data) == 'table' and data.email or nil }
+        GCIdentityEvents.server.sendRegistrationCode,
+        {
+            fullName = type(data) == 'table' and data.fullName or nil,
+            email = type(data) == 'table' and data.email or nil
+        }
+    )
+    callback({ ok = requestId ~= nil, requestId = requestId, code = requestError })
+end)
+
+RegisterNUICallback(GCIdentityNuiCallbacks.changeRegistrationEmail, function(_, callback)
+    local requestId, requestError = beginRequest(
+        'changeRegistrationEmail',
+        GCIdentityEvents.server.changeRegistrationEmail,
+        {}
+    )
+    callback({ ok = requestId ~= nil, requestId = requestId, code = requestError })
+end)
+
+RegisterNUICallback(GCIdentityNuiCallbacks.finalizeRegistration, function(_, callback)
+    local requestId, requestError = beginRequest(
+        'finalizeRegistration',
+        GCIdentityEvents.server.finalizeRegistration,
+        {}
+    )
+    callback({ ok = requestId ~= nil, requestId = requestId, code = requestError })
+end)
+
+RegisterNUICallback(GCIdentityNuiCallbacks.completeProfile, function(data, callback)
+    local requestId, requestError = beginRequest(
+        'completeProfile',
+        GCIdentityEvents.server.completeProfile,
+        { fullName = type(data) == 'table' and data.fullName or nil }
     )
     callback({ ok = requestId ~= nil, requestId = requestId, code = requestError })
 end)
@@ -355,8 +423,9 @@ RegisterCommand('gcidentity', function()
 end, false)
 
 RegisterCommand('gcregister', function(_, arguments)
-    beginRequest('registration', GCIdentityEvents.server.registerAccount, {
-        email = arguments[1]
+    beginRequest('registration', GCIdentityEvents.server.sendRegistrationCode, {
+        fullName = table.concat({ arguments[1] or '', arguments[2] or '' }, ' '),
+        email = arguments[3]
     })
 end, false)
 
@@ -381,6 +450,9 @@ end, false)
 
 AddEventHandler('onClientResourceStart', function(resourceName)
     if resourceName == GetCurrentResourceName() or resourceName == 'gc_core' then
+        if resourceName == GetCurrentResourceName() then
+            loadingScreenHandedOff = false
+        end
         startHello()
 
         if resourceName == GetCurrentResourceName() then

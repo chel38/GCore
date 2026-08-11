@@ -37,6 +37,11 @@ function GCIdentityAPI.GetAccount(playerSource)
     return GCIdentityService.GetAccount(playerSource)
 end
 
+function GCIdentityAPI.GetDisplayName(playerSource)
+    local account = GCIdentityService.GetAccount(playerSource)
+    return account and account.displayName or nil
+end
+
 function GCIdentityAPI.GetCharacters(playerSource)
     return GCIdentityService.GetCharacters(playerSource)
 end

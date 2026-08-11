@@ -3,9 +3,11 @@
 Дата: 2026-08-10
 
 > Исторический отчёт об этапе разработки. В актуальном `gc_identity
-> 0.3.0-alpha` прямой вход по trusted identifier заменён подтверждённым email и
-> fingerprint наблюдаемого сервером IP. Действующий контракт описан в
-> [Подтверждении email](email-verification.md) и README модуля.
+> 0.4.0-alpha` регистрация и security-авторизация выполняются до spawn, а
+> trusted identifier дополняется подтверждённым email и fingerprint IP,
+> наблюдаемого сервером. Действующий контракт описан в
+> [Pre-spawn регистрации](pre-spawn-registration.md) и
+> [Подтверждении email](email-verification.md).
 
 Проверенный baseline: `d1abbf0476e0ca3a5e284fe319cedef43839bc87`
 

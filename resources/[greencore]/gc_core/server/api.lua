@@ -23,6 +23,10 @@ function GCAPI.GetProtocolVersion()
     return GCVersion.GetProtocolVersion()
 end
 
+function GCAPI.GetSpawnMode()
+    return GCSpawnPolicy.GetMode()
+end
+
 function GCAPI.IsPlayerConnected(playerSource)
     return validSource(playerSource) and GCSessions.Exists(playerSource)
 end

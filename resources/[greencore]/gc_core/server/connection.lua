@@ -532,6 +532,25 @@ local function handleRecoveryHandshake(playerSource, session, payload)
         return true
     end
 
+    if GCSpawnPolicy.IsManual() then
+        local readyOk, readyError = GCStates.Set(
+            playerSource,
+            'client_ready',
+            'manual_recovery_waits_for_server_release'
+        )
+        if not readyOk then
+            return false, readyError
+        end
+
+        session.recoveryCompletedAt = GCUtils.NowSec()
+        TriggerClientEvent(
+            GCEvents.Client.connectionAccepted,
+            playerSource,
+            GCSpawnPolicy.ConnectionPayload()
+        )
+        return true
+    end
+
     local pendingOk, pendingError = GCStates.Set(playerSource, 'spawn_pending', 'recovery_requires_respawn')
 
     if not pendingOk then
@@ -591,10 +610,11 @@ function GCConnection.HandleClientReady(playerSource, payload)
     if GCStates.Is(playerSource, 'client_ready') then
         -- RU: Повторяем потерянный ACK; клиентский handler сам идемпотентен.
         -- EN: Re-send a lost ACK; the client handler is itself idempotent.
-        TriggerClientEvent(GCEvents.Client.connectionAccepted, playerSource, {
-            apiVersion = GCVersion.GetApiVersion(),
-            protocolVersion = GCVersion.GetProtocolVersion()
-        })
+        TriggerClientEvent(
+            GCEvents.Client.connectionAccepted,
+            playerSource,
+            GCSpawnPolicy.ConnectionPayload()
+        )
         return true
     end
 
@@ -611,10 +631,11 @@ function GCConnection.HandleClientReady(playerSource, payload)
         return false, errorCode
     end
 
-    TriggerClientEvent(GCEvents.Client.connectionAccepted, playerSource, {
-        apiVersion = GCVersion.GetApiVersion(),
-        protocolVersion = GCVersion.GetProtocolVersion()
-    })
+    TriggerClientEvent(
+        GCEvents.Client.connectionAccepted,
+        playerSource,
+        GCSpawnPolicy.ConnectionPayload()
+    )
     return true
 end
 

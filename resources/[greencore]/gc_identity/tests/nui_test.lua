@@ -23,10 +23,12 @@ GCModuleTest.Register('identity.nui_registration_character_focus_flow', 'integra
     GCModuleTest.ExpectTrue(IdentityTest.FocusState(), 'registration view owns NUI focus')
     GCModuleTest.ExpectTrue(IdentityTest.FrozenState(), 'registration view freezes local ped presentation')
 
-    local registration = IdentityTest.InvokeNui(GCIdentityNuiCallbacks.registerAccount, {
+    local registration = IdentityTest.InvokeNui(GCIdentityNuiCallbacks.sendRegistrationCode, {
+        fullName = 'Nui Player',
         email = 'nui@example.test'
     })
-    local duplicate = IdentityTest.InvokeNui(GCIdentityNuiCallbacks.registerAccount, {
+    local duplicate = IdentityTest.InvokeNui(GCIdentityNuiCallbacks.sendRegistrationCode, {
+        fullName = 'Nui Player',
         email = 'nui@example.test'
     })
     GCModuleTest.ExpectTrue(registration.ok, 'first registration submit accepted locally')
@@ -54,8 +56,28 @@ GCModuleTest.Register('identity.nui_registration_character_focus_flow', 'integra
     deliverLastClientEvent()
     GCModuleTest.ExpectEqual(
         IdentityTest.LastNuiMessage().payload.state,
+        'registration_verified',
+        'correct code waits for explicit finalization'
+    )
+
+    local finalization = IdentityTest.InvokeNui(GCIdentityNuiCallbacks.finalizeRegistration, {})
+    GCModuleTest.ExpectTrue(finalization.ok, 'final registration submit accepted')
+    local finalizationEvent = IdentityTest.LastServerEvent()
+    IdentityTest.EmitNetwork(finalizationEvent.name, 61, finalizationEvent.payload)
+    deliverLastClientEvent()
+    GCModuleTest.ExpectEqual(
+        IdentityTest.LastNuiMessage().payload.state,
+        'spawn_releasing',
+        'trusted server release is visible while core spawns'
+    )
+
+    IdentityTest.CompleteCoreSpawn(61)
+    GCIdentityService.SendSnapshot(61)
+    deliverLastClientEvent()
+    GCModuleTest.ExpectEqual(
+        IdentityTest.LastNuiMessage().payload.state,
         'character_required',
-        'correct code advances to character UI'
+        'character UI opens only after authoritative core spawn'
     )
 
     local creation = IdentityTest.InvokeNui(GCIdentityNuiCallbacks.createCharacter, {

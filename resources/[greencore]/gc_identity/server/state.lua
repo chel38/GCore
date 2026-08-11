@@ -8,6 +8,7 @@ local allowedTransitions = {
         registration_required = true,
         email_verification_pending = true,
         auth_verification_required = true,
+        profile_completion_required = true,
         authorized = true,
         error = true,
         disconnecting = true
@@ -21,6 +22,7 @@ local allowedTransitions = {
     registering = {
         registration_required = true,
         email_verification_pending = true,
+        registration_verified = true,
         auth_verification_required = true,
         authorized = true,
         error = true,
@@ -32,6 +34,24 @@ local allowedTransitions = {
         error = true,
         disconnecting = true
     },
+    registration_verified = {
+        registration_finalizing = true,
+        registration_required = true,
+        error = true,
+        disconnecting = true
+    },
+    registration_finalizing = {
+        registration_verified = true,
+        profile_completion_required = true,
+        authorized = true,
+        error = true,
+        disconnecting = true
+    },
+    profile_completion_required = {
+        registration_finalizing = true,
+        error = true,
+        disconnecting = true
+    },
     auth_verification_required = {
         loading = true,
         authorized = true,
@@ -39,6 +59,21 @@ local allowedTransitions = {
         disconnecting = true
     },
     authorized = {
+        spawn_releasing = true,
+        profile_completion_required = true,
+        character_required = true,
+        character_selected = true,
+        ready = true,
+        error = true,
+        disconnecting = true
+    },
+    spawn_releasing = {
+        authorized = true,
+        post_spawn_identity = true,
+        error = true,
+        disconnecting = true
+    },
+    post_spawn_identity = {
         character_required = true,
         character_selected = true,
         ready = true,
@@ -102,6 +137,8 @@ function GCIdentityStates.Create(playerSource)
         characters = {},
         selectedCharacterId = nil,
         pendingVerification = nil,
+        pendingRegistration = nil,
+        spawnReleaseRequested = false,
         processedRequests = {},
         processedOrder = {}
     }
@@ -125,6 +162,22 @@ function GCIdentityStates.ClearPendingVerification(playerSource)
         return false
     end
     session.pendingVerification = nil
+    return true
+end
+
+function GCIdentityStates.SetPendingRegistration(playerSource, registration)
+    local session = GCIdentityStates.Get(playerSource)
+    if not session or type(registration) ~= 'table' then
+        return false, 'GC-IDENTITY-STATE-REGISTRATION-INVALID'
+    end
+    session.pendingRegistration = registration
+    return true
+end
+
+function GCIdentityStates.ClearPendingRegistration(playerSource)
+    local session = GCIdentityStates.Get(playerSource)
+    if not session then return false end
+    session.pendingRegistration = nil
     return true
 end
 
@@ -216,6 +269,8 @@ function GCIdentityStates.IsAuthorized(playerSource)
 
     return session ~= nil and (
         session.state == 'authorized'
+        or session.state == 'spawn_releasing'
+        or session.state == 'post_spawn_identity'
         or session.state == 'character_required'
         or session.state == 'character_selected'
         or session.state == 'ready'

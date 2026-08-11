@@ -6,6 +6,37 @@ All notable changes to this project are documented in this file.
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.5-alpha] - 2026-08-11
+
+### Добавлено / Added
+
+- Универсальный Core spawn mode: `automatic` сохраняет standalone-поведение,
+  `manual` разрешает spawn только доверенному server export `RequestPlayerSpawn`.
+- Server-local `gc_core:hook:playerSpawned` для подтверждённого lifecycle без
+  раскрытия внутренних session/state таблиц.
+- `gc_identity 0.4.0-alpha` с pre-spawn регистрацией: зарегистрированное имя,
+  email challenge, отдельная финализация и атомарное создание аккаунта.
+- Миграция `003_pre_spawn_registration` и Public API `GetDisplayName(source)`.
+- Regression tests для spawn gate, запрета раннего аккаунта/spawn, duplicate
+  finalize, смены email и legacy profile completion.
+
+### Изменено / Changed
+
+- Network protocol `gc_core` повышен до `2`; connection ACK теперь явно
+  сообщает `spawnMode`. Core API остаётся `1` и backward-compatible.
+- `gc_identity` повышен до resource `0.4.0-alpha`, protocol `3`; Identity API
+  остаётся `1`.
+- Персонажи остаются post-spawn domain, а account registration/security теперь
+  полностью завершаются до выдачи spawn decision.
+
+### Безопасность / Security
+
+- Клиентский `requestSpawn` в manual mode всегда отклоняется кодом
+  `GC-SPAWN-MANUAL-ONLY` и не создаёт spawn decision.
+- Подтверждение email не создаёт аккаунт и не авторизует spawn. Финализация
+  повторно проверяет server-owned identifier, endpoint fingerprint, challenge,
+  имя и email внутри атомарной repository transaction.
+
 ## [0.1.4-alpha] - 2026-08-10
 
 ### Исправлено / Fixed

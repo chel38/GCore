@@ -1,7 +1,12 @@
 import type { CharacterDto, IdentitySnapshot, NuiBridge, NuiMessage } from './types'
 
 const errorMessages: Record<string, string> = {
-  'GC-IDENTITY-REGISTRATION-INVALID': 'Проверьте адрес электронной почты.',
+  'GC-IDENTITY-REGISTRATION-INVALID': 'Укажите имя, фамилию латиницей и корректный email.',
+  'GC-IDENTITY-REGISTRATION-NAME-INVALID': 'Имя и фамилия должны состоять только из латинских букв.',
+  'GC-IDENTITY-NAME-INVALID': 'Имя и фамилия должны состоять только из латинских букв.',
+  'GC-IDENTITY-REGISTRATION-NOT-VERIFIED': 'Сначала подтвердите адрес электронной почты.',
+  'GC-IDENTITY-REGISTRATION-CHANGED': 'Данные регистрации изменились. Запросите новый код.',
+  'GC-IDENTITY-SPAWN-MODE-MISCONFIGURED': 'Сервер не включил безопасный pre-spawn режим.',
   'GC-IDENTITY-EMAIL-TAKEN': 'Этот адрес уже используется.',
   'GC-IDENTITY-EMAIL-CODE-INVALID': 'Неверный код подтверждения.',
   'GC-IDENTITY-EMAIL-CODE-EXPIRED': 'Код истёк. Запросите новый.',
@@ -22,6 +27,25 @@ const errorMessages: Record<string, string> = {
   'GC-IDENTITY-NUI-NOT-READY': 'Интерфейс профиля не смог запуститься.',
   'GC-IDENTITY-CLIENT-REQUEST-PENDING': 'Предыдущий запрос ещё выполняется.',
   'GC-IDENTITY-NUI-TRANSPORT': 'Не удалось связаться с игровым клиентом.',
+}
+
+const errorMessagesEn: Record<string, string> = {
+  'GC-IDENTITY-REGISTRATION-INVALID': 'Enter a Latin first and last name and a valid email.',
+  'GC-IDENTITY-NAME-INVALID': 'First and last name may contain Latin letters only.',
+  'GC-IDENTITY-EMAIL-TAKEN': 'This email is already in use.',
+  'GC-IDENTITY-EMAIL-CODE-INVALID': 'The verification code is invalid.',
+  'GC-IDENTITY-EMAIL-CODE-EXPIRED': 'The code expired. Request a new one.',
+  'GC-IDENTITY-EMAIL-CODE-ATTEMPTS': 'The attempt limit was reached. Request a new code.',
+  'GC-IDENTITY-EMAIL-RESEND-COOLDOWN': 'Please wait before requesting another code.',
+  'GC-IDENTITY-MAIL-UNAVAILABLE': 'Email delivery is temporarily unavailable.',
+  'GC-IDENTITY-MAIL-TIMEOUT': 'The mail service did not respond in time.',
+  'GC-IDENTITY-DATABASE-UNAVAILABLE': 'The identity service is temporarily unavailable.',
+  'GC-IDENTITY-CORE-UNAVAILABLE': 'The game core is temporarily unavailable.',
+  'GC-IDENTITY-SPAWN-MODE-MISCONFIGURED': 'The server did not enable secure pre-spawn mode.',
+  'GC-IDENTITY-HELLO-TIMEOUT': 'The server did not confirm identity state in time.',
+  'GC-IDENTITY-NUI-NOT-READY': 'The identity interface failed to start.',
+  'GC-IDENTITY-CLIENT-REQUEST-PENDING': 'The previous request is still running.',
+  'GC-IDENTITY-NUI-TRANSPORT': 'The interface could not reach the game client.',
 }
 
 function escapeHtml(value: string): string {
@@ -49,6 +73,7 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
   let errorCode: string | null = null
   let exitConfirmation = false
   let snapshotReceivedAt = Date.now()
+  const tr = (ru: string, en: string): string => snapshot?.locale === 'en' ? en : ru
 
   const remaining = (initial: number): number => Math.max(
     0,
@@ -60,19 +85,21 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
       <div class="panel panel--small text-center">
         <div class="brand-mark" aria-hidden="true">G</div>
         <p class="eyebrow">GCore Identity</p>
-        <h1>Подготавливаем профиль</h1>
-        <p class="muted">Проверяем аккаунт и доступных персонажей…</p>
-        <div class="loader" role="status" aria-label="Загрузка"></div>
+        <h1>${tr('Подготавливаем профиль', 'Preparing your profile')}</h1>
+        <p class="muted">${tr('Проверяем аккаунт и доступных персонажей…', 'Checking your account and available characters…')}</p>
+        <div class="loader" role="status" aria-label="${tr('Загрузка', 'Loading')}"></div>
       </div>
     </section>`
 
   const renderError = (): string => {
-    const message = errorMessages[errorCode ?? ''] ?? 'Запрос отклонён. Повторите попытку.'
+    const messages = snapshot?.locale === 'en' ? errorMessagesEn : errorMessages
+    const message = messages[errorCode ?? ''] ?? tr('Запрос отклонён. Повторите попытку.', 'The request was rejected. Try again.')
     return `<div class="alert" role="alert"><span>${escapeHtml(message)}</span><button data-action="dismiss-error" aria-label="Закрыть">×</button></div>`
   }
 
   const renderLifecycleFailure = (): string => {
-    const message = errorMessages[errorCode ?? ''] ?? 'Не удалось подготовить профиль.'
+    const messages = snapshot?.locale === 'en' ? errorMessagesEn : errorMessages
+    const message = messages[errorCode ?? ''] ?? tr('Не удалось подготовить профиль.', 'The profile could not be prepared.')
     return `
       <section class="identity-shell" data-view="lifecycle-error">
         <div class="panel panel--small text-center">
@@ -102,27 +129,32 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
       </section>
     </div>` : ''
 
-  const renderRegistration = (): string => `
+  const renderRegistration = (): string => {
+    const registration = snapshot?.registration
+    return `
     <section class="identity-shell" data-view="registration">
       <div class="panel panel--form">
         <header class="panel-header">
           <div class="brand-mark" aria-hidden="true">G</div>
-          <div><p class="eyebrow">Первый вход</p><h1>Создайте профиль</h1></div>
+          <div><p class="eyebrow">${tr('Первый вход', 'First visit')}</p><h1>${tr('Регистрация', 'Registration')}</h1></div>
         </header>
-        <p class="muted">Укажите email — мы отправим шестизначный код. Аккаунт будет создан только после подтверждения. Пароль не используется.</p>
+        <p class="muted">${tr('Укажите имя и фамилию латиницей, затем email. Аккаунт и spawn будут разрешены только после подтверждения и финального шага.', 'Enter a Latin first and last name, then email. The account and spawn are allowed only after verification and finalization.')}</p>
         ${errorCode ? renderError() : ''}
         <form data-form="registration" novalidate>
-          <label for="email">Электронная почта</label>
-          <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="player@example.com" />
-          <p class="field-note">Мы не запрашиваем пароль и не показываем license в интерфейсе.</p>
+          <label for="fullName">${tr('Имя Фамилия', 'First name Last name')}</label>
+          <input id="fullName" name="fullName" type="text" autocomplete="name" minlength="5" maxlength="65" pattern="[A-Za-z]+ [A-Za-z]+" required placeholder="John Smith" value="${escapeHtml(registration?.fullName ?? '')}" />
+          <label for="email">${tr('Электронная почта', 'Email')}</label>
+          <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="player@example.com" value="${escapeHtml(registration?.email ?? '')}" />
+          <p class="field-note">${tr('Мы не запрашиваем пароль и не показываем license в интерфейсе.', 'We do not request a password or expose your license in the UI.')}</p>
           <button class="button button--primary" type="submit" ${pendingAction ? 'disabled' : ''}>
-            ${pendingAction === 'registerAccount' ? 'Отправляем…' : 'Получить код'}
+            ${pendingAction === 'sendRegistrationCode' ? tr('Отправляем…', 'Sending…') : tr('Отправить код', 'Send code')}
           </button>
         </form>
         <button class="text-button" data-action="ask-exit">Выйти с сервера</button>
       </div>
       ${renderExitModal()}
     </section>`
+  }
 
   const renderVerification = (): string => {
     const verification = snapshot?.verification
@@ -134,24 +166,68 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
         <div class="panel panel--form">
           <header class="panel-header">
             <div class="brand-mark" aria-hidden="true">G</div>
-            <div><p class="eyebrow">${authentication ? 'Безопасность входа' : 'Подтверждение email'}</p><h1>${authentication ? 'Новый сетевой адрес' : 'Проверьте почту'}</h1></div>
+            <div><p class="eyebrow">${authentication ? tr('Безопасность входа', 'Login security') : tr('Подтверждение email', 'Email verification')}</p><h1>${authentication ? tr('Новый сетевой адрес', 'New network address') : tr('Проверьте почту', 'Check your inbox')}</h1></div>
           </header>
-          <p class="muted">Код отправлен на <strong>${escapeHtml(verification.maskedEmail)}</strong>. ${authentication ? 'Подтвердите вход с нового сетевого адреса.' : 'Введите его, чтобы завершить регистрацию.'}</p>
+          <p class="muted">${tr('Код отправлен на', 'A code was sent to')} <strong>${escapeHtml(verification.maskedEmail)}</strong>. ${authentication ? tr('Подтвердите вход с нового сетевого адреса.', 'Confirm login from the new network address.') : tr('Проверка кода ещё не создаёт аккаунт и не разрешает spawn.', 'Code verification does not create the account or allow spawn yet.')}</p>
           ${errorCode ? renderError() : ''}
           <form data-form="verification" novalidate>
-            <label for="verificationCode">Шестизначный код</label>
+            <label for="verificationCode">${tr('Шестизначный код', 'Six-digit code')}</label>
             <input class="verification-code" id="verificationCode" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" minlength="6" maxlength="6" pattern="[0-9]{6}" required placeholder="000000" />
-            <p class="field-note">Код действует ещё <span data-expires-timer>${remaining(verification.expiresIn)}</span> сек. Сервер проверяет срок и число попыток.</p>
-            <button class="button button--primary" type="submit" ${pendingAction ? 'disabled' : ''}>${pendingAction === 'verifyEmail' ? 'Проверяем…' : 'Подтвердить'}</button>
+            <p class="field-note">${tr('Код действует ещё', 'Code expires in')} <span data-expires-timer>${remaining(verification.expiresIn)}</span> ${tr('сек. Сервер проверяет срок и число попыток.', 'sec. The server checks expiry and attempts.')}</p>
+            <button class="button button--primary" type="submit" ${pendingAction ? 'disabled' : ''}>${pendingAction === 'verifyEmail' ? tr('Проверяем…', 'Verifying…') : tr('Подтвердить', 'Verify')}</button>
           </form>
           <button class="text-button" data-action="resend-verification" data-resend-button ${pendingAction || resendIn > 0 ? 'disabled' : ''}>
-            ${resendIn > 0 ? `Отправить снова через <span data-resend-timer>${resendIn}</span> сек.` : 'Отправить новый код'}
+            ${resendIn > 0 ? `${tr('Отправить снова через', 'Send again in')} <span data-resend-timer>${resendIn}</span> ${tr('сек.', 'sec.')}` : tr('Отправить новый код', 'Send a new code')}
           </button>
+          ${authentication ? '' : `<button class="text-button" data-action="change-registration-email">${tr('Изменить email', 'Change email')}</button>`}
           <button class="text-button" data-action="ask-exit">Выйти с сервера</button>
         </div>
         ${renderExitModal()}
       </section>`
   }
+
+  const renderRegistrationVerified = (): string => {
+    const registration = snapshot?.registration
+    if (!registration?.emailVerified) return renderLifecycleFailure()
+    return `
+      <section class="identity-shell" data-view="registration-verified">
+        <div class="panel panel--form text-center">
+          <div class="brand-mark" aria-hidden="true">G</div>
+          <p class="eyebrow">${tr('Email подтверждён', 'Email verified')}</p>
+          <h1>${tr('Завершите регистрацию', 'Finish registration')}</h1>
+          <p class="muted"><strong>${escapeHtml(registration.fullName)}</strong><br />${escapeHtml(registration.email)}</p>
+          <p class="field-note">${tr('Только этот шаг атомарно создаст аккаунт и разрешит серверу запросить spawn.', 'Only this step atomically creates the account and lets the server request spawn.')}</p>
+          ${errorCode ? renderError() : ''}
+          <button class="button button--primary" data-action="finalize-registration" ${pendingAction ? 'disabled' : ''}>
+            ${pendingAction === 'finalizeRegistration' ? tr('Завершаем…', 'Finishing…') : tr('Завершить регистрацию', 'Finish registration')}
+          </button>
+          <button class="text-button" data-action="change-registration-email">${tr('Изменить email', 'Change email')}</button>
+          <button class="text-button" data-action="ask-exit">Выйти с сервера</button>
+        </div>
+        ${renderExitModal()}
+      </section>`
+  }
+
+  const renderProfileCompletion = (): string => `
+    <section class="identity-shell" data-view="profile-completion">
+      <div class="panel panel--form">
+        <header class="panel-header">
+          <div class="brand-mark" aria-hidden="true">G</div>
+          <div><p class="eyebrow">${tr('Обновление профиля', 'Profile update')}</p><h1>${tr('Регистрация', 'Registration')}</h1></div>
+        </header>
+        <p class="muted">${tr('У этого существующего аккаунта ещё нет зарегистрированного имени. Укажите имя и фамилию латиницей до spawn.', 'This existing account has no registered name yet. Enter a Latin first and last name before spawn.')}</p>
+        ${errorCode ? renderError() : ''}
+        <form data-form="profile" novalidate>
+          <label for="profileFullName">${tr('Имя Фамилия', 'First name Last name')}</label>
+          <input id="profileFullName" name="fullName" type="text" autocomplete="name" minlength="5" maxlength="65" pattern="[A-Za-z]+ [A-Za-z]+" required placeholder="John Smith" />
+          <button class="button button--primary" type="submit" ${pendingAction ? 'disabled' : ''}>
+            ${pendingAction === 'completeProfile' ? tr('Сохраняем…', 'Saving…') : tr('Сохранить и продолжить', 'Save and continue')}
+          </button>
+        </form>
+        <button class="text-button" data-action="ask-exit">Выйти с сервера</button>
+      </div>
+      ${renderExitModal()}
+    </section>`
 
   const renderCharacters = (): string => {
     const characters = snapshot?.characters ?? []
@@ -203,12 +279,16 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
       } else {
         root.innerHTML = ''
       }
-    } else if (['uninitialized', 'loading', 'authorized', 'registering', 'character_selected'].includes(snapshot.state)) {
+    } else if (['uninitialized', 'loading', 'authorized', 'registering', 'registration_finalizing', 'spawn_releasing', 'post_spawn_identity', 'character_selected'].includes(snapshot.state)) {
       root.innerHTML = renderLoading()
     } else if (snapshot.state === 'registration_required') {
       root.innerHTML = renderRegistration()
     } else if (snapshot.state === 'email_verification_pending' || snapshot.state === 'auth_verification_required') {
       root.innerHTML = renderVerification()
+    } else if (snapshot.state === 'registration_verified') {
+      root.innerHTML = renderRegistrationVerified()
+    } else if (snapshot.state === 'profile_completion_required') {
+      root.innerHTML = renderProfileCompletion()
     } else if (snapshot.state === 'character_required') {
       root.innerHTML = renderCharacters()
     } else if (snapshot.state === 'error') {
@@ -258,9 +338,14 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
 
     const values = new FormData(form)
     if (form.dataset.form === 'registration') {
-      void invoke('registerAccount', { email: String(values.get('email') ?? '').trim() })
+      void invoke('sendRegistrationCode', {
+        fullName: String(values.get('fullName') ?? '').trim(),
+        email: String(values.get('email') ?? '').trim(),
+      })
     } else if (form.dataset.form === 'verification') {
       void invoke('verifyEmail', { code: String(values.get('code') ?? '').trim() })
+    } else if (form.dataset.form === 'profile') {
+      void invoke('completeProfile', { fullName: String(values.get('fullName') ?? '').trim() })
     } else if (form.dataset.form === 'character') {
       void invoke('createCharacter', {
         firstName: String(values.get('firstName') ?? '').trim(),
@@ -292,6 +377,10 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
       void invoke('refresh', {})
     } else if (action === 'resend-verification') {
       void invoke('resendVerification', {})
+    } else if (action === 'change-registration-email') {
+      void invoke('changeRegistrationEmail', {})
+    } else if (action === 'finalize-registration') {
+      void invoke('finalizeRegistration', {})
     }
   }
 
@@ -316,7 +405,7 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
     if (resend) resend.textContent = String(resendIn)
     if (resendButton && resendIn === 0 && !pendingAction) {
       resendButton.disabled = false
-      resendButton.textContent = 'Отправить новый код'
+      resendButton.textContent = tr('Отправить новый код', 'Send a new code')
     }
   }, 1000)
 

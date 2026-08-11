@@ -3,13 +3,20 @@ import { nuiBridge } from './bridge'
 import type { IdentitySnapshot, NuiBridge } from './types'
 
 const registration: IdentitySnapshot = {
-  protocolVersion: 2,
+  protocolVersion: 3,
+  locale: 'ru',
   state: 'registration_required',
   account: null,
   characters: [],
   selectedCharacter: null,
   limits: { maxCharacters: 3 },
   passwordAuthentication: false,
+  registration: {
+    fullName: '',
+    email: '',
+    emailVerified: false,
+    profileOnly: false,
+  },
 }
 
 function deferred<T>() {
@@ -63,6 +70,7 @@ describe('gc_identity NUI', () => {
     app.receive({ type: 'snapshot', payload: registration })
     expect(root.hidden).toBe(false)
     expect(root.querySelector('[data-view="registration"]')).not.toBeNull()
+    expect(root.querySelector('#fullName')).not.toBeNull()
     expect(root.querySelector('input[type="password"]')).toBeNull()
     app.destroy()
   })
@@ -96,10 +104,15 @@ describe('gc_identity NUI', () => {
     const app = createIdentityApp(root, { invoke })
     app.receive({ type: 'snapshot', payload: registration })
     const form = root.querySelector<HTMLFormElement>('[data-form="registration"]')!
+    root.querySelector<HTMLInputElement>('#fullName')!.value = 'John Smith'
     root.querySelector<HTMLInputElement>('#email')!.value = 'player@example.test'
     form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
     form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
     expect(invoke).toHaveBeenCalledTimes(1)
+    expect(invoke).toHaveBeenCalledWith('sendRegistrationCode', {
+      fullName: 'John Smith',
+      email: 'player@example.test',
+    })
     pending.resolve({ ok: true })
     await pending.promise
     app.destroy()
@@ -125,12 +138,45 @@ describe('gc_identity NUI', () => {
       payload: {
         ...registration,
         state: 'character_required',
-        account: { id: 1, email: 'safe@example.test', status: 'active', createdAt: 1 },
+        account: {
+          id: 1,
+          email: 'safe@example.test',
+          firstName: 'John',
+          lastName: 'Smith',
+          displayName: 'John Smith',
+          status: 'active',
+          createdAt: 1,
+        },
         characters: [{ id: 1, firstName: '<img src=x>', lastName: 'Player', createdAt: 1 }],
       },
     })
     expect(root.querySelector('img')).toBeNull()
     expect(root.textContent).toContain('<img src=x> Player')
+    app.destroy()
+  })
+
+  it('requires an explicit finalization after a registration code was verified', () => {
+    const invoke = vi.fn().mockResolvedValue({ ok: true })
+    const root = document.querySelector<HTMLElement>('#app')!
+    const app = createIdentityApp(root, { invoke })
+    app.receive({
+      type: 'snapshot',
+      payload: {
+        ...registration,
+        state: 'registration_verified',
+        verification: null,
+        registration: {
+          fullName: 'John Smith',
+          email: 'player@example.test',
+          emailVerified: true,
+          profileOnly: false,
+        },
+      },
+    })
+    expect(root.querySelector('[data-view="registration-verified"]')).not.toBeNull()
+    expect(invoke).not.toHaveBeenCalled()
+    root.querySelector<HTMLElement>('[data-action="finalize-registration"]')!.click()
+    expect(invoke).toHaveBeenCalledWith('finalizeRegistration', {})
     app.destroy()
   })
 })

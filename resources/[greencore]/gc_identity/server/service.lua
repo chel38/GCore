@@ -16,6 +16,10 @@ local function publicAccount(account)
     return {
         id = account.id,
         email = account.email,
+        firstName = account.firstName,
+        lastName = account.lastName,
+        displayName = account.firstName and account.lastName
+            and (account.firstName .. ' ' .. account.lastName) or nil,
         status = account.status,
         createdAt = account.createdAt
     }
@@ -47,6 +51,11 @@ local function coreFor(playerSource, requireGameplay)
             or apiVersion % 1 ~= 0
             or apiVersion < GCIdentityConfig.requiredCoreApi then
             return nil, 'GC-IDENTITY-CORE-API-INCOMPATIBLE'
+        end
+
+        if type(core.GetSpawnMode) ~= 'function'
+            or core:GetSpawnMode() ~= 'manual' then
+            return nil, 'GC-IDENTITY-SPAWN-MODE-MISCONFIGURED'
         end
 
         if not core:IsPlayerConnected(playerSource) then
@@ -175,6 +184,111 @@ local function selectedFrom(characters, characterId)
     return nil
 end
 
+local function hasRegisteredName(account)
+    return type(account) == 'table'
+        and type(account.firstName) == 'string' and account.firstName ~= ''
+        and type(account.lastName) == 'string' and account.lastName ~= ''
+end
+
+local function publicLocale(playerSource)
+    local ok, session = pcall(function()
+        return exports['gc_core']:GetPlayerSession(playerSource)
+    end)
+    if ok and type(session) == 'table' and session.locale == 'en' then
+        return 'en'
+    end
+    return 'ru'
+end
+
+local function enterPostSpawnIdentity(playerSource)
+    local session = GCIdentityStates.Get(playerSource)
+    if not session or not GCIdentityStates.IsAuthorized(playerSource) then
+        return nil, 'GC-IDENTITY-SPAWN-NOT-AUTHORIZED'
+    end
+
+    if session.state == 'spawn_releasing' then
+        local transitioned, transitionError = transitionOrError(
+            playerSource,
+            'post_spawn_identity'
+        )
+        if not transitioned then return nil, transitionError end
+    elseif session.state ~= 'post_spawn_identity' then
+        return GCIdentityService.GetSnapshot(playerSource)
+    end
+
+    local selected = selectedFrom(session.characters, session.account.selectedCharacterId)
+    local transitioned, transitionError
+    if selected then
+        GCIdentityStates.SelectCharacter(playerSource, selected.id)
+        transitioned, transitionError = transitionOrError(playerSource, 'character_selected')
+        if transitioned then
+            transitioned, transitionError = transitionOrError(playerSource, 'ready')
+        end
+    else
+        GCIdentityStates.SelectCharacter(playerSource, nil)
+        transitioned, transitionError = transitionOrError(playerSource, 'character_required')
+    end
+
+    if not transitioned then return nil, transitionError end
+    GCIdentityService.SendSnapshot(playerSource)
+    return GCIdentityService.GetSnapshot(playerSource)
+end
+
+function GCIdentityService.ReleasePlayerToSpawn(playerSource, generation)
+    local session = GCIdentityStates.Get(playerSource)
+    if not session or (generation and session.generation ~= generation)
+        or not GCIdentityStates.IsAuthorized(playerSource)
+        or not hasRegisteredName(session.account)
+        or session.pendingVerification ~= nil then
+        return nil, 'GC-IDENTITY-SPAWN-NOT-AUTHORIZED'
+    end
+
+    local core, coreError = coreFor(playerSource, false)
+    if not core then return nil, coreError end
+
+    if core:IsPlayerSpawned(playerSource) then
+        if session.state == 'authorized' then
+            local transitioned, transitionError = transitionOrError(playerSource, 'spawn_releasing')
+            if not transitioned then return nil, transitionError end
+        end
+        session.spawnReleaseRequested = true
+        return enterPostSpawnIdentity(playerSource)
+    end
+
+    if session.spawnReleaseRequested then
+        return GCIdentityService.GetSnapshot(playerSource)
+    end
+
+    session.spawnReleaseRequested = true
+    local transitioned, transitionError = transitionOrError(playerSource, 'spawn_releasing')
+    if not transitioned then
+        session.spawnReleaseRequested = false
+        return nil, transitionError
+    end
+
+    local decision, spawnError = core:RequestPlayerSpawn(playerSource)
+    if not decision then
+        session.spawnReleaseRequested = false
+        transitionOrError(playerSource, 'authorized')
+        GCIdentityLogger.Error(
+            spawnError or 'GC-IDENTITY-SPAWN-RELEASE-FAILED',
+            'gc_core rejected trusted server spawn release',
+            { source = playerSource }
+        )
+        return nil, spawnError or 'GC-IDENTITY-SPAWN-RELEASE-FAILED'
+    end
+
+    return GCIdentityService.GetSnapshot(playerSource)
+end
+
+function GCIdentityService.HandleCoreSpawned(playerSource)
+    local session = GCIdentityStates.Get(playerSource)
+    if not session or not session.spawnReleaseRequested then
+        return nil, 'GC-IDENTITY-SPAWN-NOT-AUTHORIZED'
+    end
+    return enterPostSpawnIdentity(playerSource)
+end
+
 local function commitAuthorized(
     playerSource,
     generation,
@@ -212,33 +326,42 @@ local function commitAuthorized(
     end
 
     GCIdentityStates.ClearPendingVerification(playerSource)
+    GCIdentityStates.ClearPendingRegistration(playerSource)
 
     GCIdentityStates.SetCharacters(playerSource, characters)
+
+    if not hasRegisteredName(account) then
+        GCIdentityStates.SetPendingRegistration(playerSource, {
+            firstName = nil,
+            lastName = nil,
+            email = account.email,
+            verified = true,
+            profileOnly = true
+        })
+        local profileOk, profileError = transitionOrError(
+            playerSource,
+            'profile_completion_required'
+        )
+        if not profileOk then
+            return failSession(playerSource, generation, profileError)
+        end
+        return GCIdentityService.GetSnapshot(playerSource)
+    end
+
     local transitioned, transitionError = transitionOrError(playerSource, 'authorized')
 
     if not transitioned then
         return failSession(playerSource, generation, transitionError)
     end
 
-    local selected = selectedFrom(characters, account.selectedCharacterId)
-
-    if selected then
-        GCIdentityStates.SelectCharacter(playerSource, selected.id)
-        transitioned, transitionError = transitionOrError(playerSource, 'character_selected')
-
-        if transitioned then
-            transitioned, transitionError = transitionOrError(playerSource, 'ready')
-        end
-    else
-        GCIdentityStates.SelectCharacter(playerSource, nil)
-        transitioned, transitionError = transitionOrError(playerSource, 'character_required')
+    local released, releaseError = GCIdentityService.ReleasePlayerToSpawn(
+        playerSource,
+        generation
+    )
+    if not released then
+        return failSession(playerSource, generation, releaseError)
     end
-
-    if not transitioned then
-        return failSession(playerSource, generation, transitionError)
-    end
-
-    return GCIdentityService.GetSnapshot(playerSource)
+    return released
 end
 
 local function replayResult(playerSource, action, requestId)
@@ -316,6 +439,7 @@ function GCIdentityService.GetSnapshot(playerSource)
 
     local verification
     local pending = session.pendingVerification
+    local pendingRegistration = session.pendingRegistration
 
     if pending then
         verification = {
@@ -331,8 +455,29 @@ function GCIdentityService.GetSnapshot(playerSource)
         }
     end
 
+    local registration
+    if pendingRegistration then
+        registration = {
+            fullName = pendingRegistration.firstName
+                and pendingRegistration.lastName
+                and (pendingRegistration.firstName .. ' ' .. pendingRegistration.lastName)
+                or '',
+            email = pendingRegistration.email or '',
+            emailVerified = pendingRegistration.verified == true,
+            profileOnly = pendingRegistration.profileOnly == true
+        }
+    elseif session.state == 'profile_completion_required' then
+        registration = {
+            fullName = '',
+            email = '',
+            emailVerified = true,
+            profileOnly = true
+        }
+    end
+
     return {
         protocolVersion = GCIdentityVersion.protocol,
+        locale = publicLocale(playerSource),
         state = session.state,
         account = GCIdentityService.GetAccount(playerSource),
         characters = GCIdentityService.GetCharacters(playerSource),
@@ -341,7 +486,8 @@ function GCIdentityService.GetSnapshot(playerSource)
             maxCharacters = GCIdentityConfig.characters.maximum
         },
         passwordAuthentication = false,
-        verification = verification
+        verification = verification,
+        registration = registration
     }
 end
 
@@ -365,11 +511,25 @@ local function beginVerification(playerSource, generation, options, isResend)
             bindingKey = options.bindingKey,
             challengeId = existing.id,
             expiresAt = existing.expiresAt,
-            lastSentAt = existing.lastSentAt
+            lastSentAt = existing.lastSentAt,
+            verifiedAt = existing.verifiedAt
         })
 
+        if options.type == 'registration' then
+            GCIdentityStates.SetPendingRegistration(playerSource, {
+                firstName = existing.firstName,
+                lastName = existing.lastName,
+                email = existing.email,
+                verified = existing.verifiedAt ~= nil,
+                profileOnly = false
+            })
+        end
+
         if resendIn > 0 then
-            transitionOrError(playerSource, options.pendingState)
+            transitionOrError(
+                playerSource,
+                existing.verifiedAt and options.verifiedState or options.pendingState
+            )
             if isResend then
                 return nil, 'GC-IDENTITY-EMAIL-RESEND-COOLDOWN'
             end
@@ -400,6 +560,8 @@ local function beginVerification(playerSource, generation, options, isResend)
         email = options.email,
         type = options.type,
         codeHash = codeHash,
+        firstName = options.firstName,
+        lastName = options.lastName,
         expiresAt = now + GCIdentityConfig.verification.ttlSeconds,
         maxAttempts = GCIdentityConfig.verification.maximumAttempts
     })
@@ -418,8 +580,19 @@ local function beginVerification(playerSource, generation, options, isResend)
         bindingKey = options.bindingKey,
         challengeId = challenge.id,
         expiresAt = challenge.expiresAt,
-        lastSentAt = challenge.lastSentAt
+        lastSentAt = challenge.lastSentAt,
+        verifiedAt = nil
     })
+
+    if options.type == 'registration' then
+        GCIdentityStates.SetPendingRegistration(playerSource, {
+            firstName = options.firstName,
+            lastName = options.lastName,
+            email = options.email,
+            verified = false,
+            profileOnly = false
+        })
+    end
 
     GCIdentityMailClient.SendVerification(
         options.email,
@@ -461,6 +634,74 @@ local function beginVerification(playerSource, generation, options, isResend)
     return { pending = true }
 end
 
+local function restoreRegistrationChallenge(
+    playerSource,
+    generation,
+    account,
+    identifierType,
+    identifier,
+    ipFingerprint
+)
+    local bindingKey = challengeBinding(
+        'registration',
+        identifierType,
+        identifier,
+        ipFingerprint
+    )
+    if not bindingKey then
+        return failSession(
+            playerSource,
+            generation,
+            'GC-IDENTITY-CHALLENGE-SECRET-MISSING'
+        )
+    end
+
+    local challenge, challengeError = GCIdentityRepository.GetVerificationChallenge(
+        bindingKey,
+        'registration'
+    )
+    if not challenge then
+        if challengeError ~= 'GC-IDENTITY-EMAIL-VERIFICATION-REQUIRED' then
+            return failSession(playerSource, generation, challengeError)
+        end
+        transitionOrError(playerSource, 'registration_required')
+        return GCIdentityService.GetSnapshot(playerSource)
+    end
+
+    if challenge.expiresAt <= os.time() then
+        GCIdentityRepository.InvalidateVerificationChallenge(challenge.id)
+        transitionOrError(playerSource, 'registration_required')
+        return GCIdentityService.GetSnapshot(playerSource)
+    end
+
+    GCIdentityStates.SetPendingVerification(playerSource, {
+        type = 'registration',
+        email = challenge.email,
+        accountId = account and account.id or nil,
+        identifierType = identifierType,
+        identifier = identifier,
+        ipFingerprint = ipFingerprint,
+        bindingKey = bindingKey,
+        challengeId = challenge.id,
+        expiresAt = challenge.expiresAt,
+        lastSentAt = challenge.lastSentAt,
+        verifiedAt = challenge.verifiedAt
+    })
+    GCIdentityStates.SetPendingRegistration(playerSource, {
+        firstName = challenge.firstName,
+        lastName = challenge.lastName,
+        email = challenge.email,
+        verified = challenge.verifiedAt ~= nil,
+        profileOnly = false
+    })
+    transitionOrError(
+        playerSource,
+        challenge.verifiedAt and 'registration_verified'
+            or 'email_verification_pending'
+    )
+    return GCIdentityService.GetSnapshot(playerSource)
+end
+
 function GCIdentityService.Resolve(playerSource)
     if not validSource(playerSource) then
         return nil, 'GC-IDENTITY-SOURCE-INVALID'
@@ -482,6 +723,8 @@ function GCIdentityService.Resolve(playerSource)
         GCIdentityStates.IsAuthorized(playerSource)
         or existing.state == 'registration_required'
         or existing.state == 'email_verification_pending'
+        or existing.state == 'registration_verified'
+        or existing.state == 'profile_completion_required'
         or existing.state == 'auth_verification_required'
     ) then
         return GCIdentityService.GetSnapshot(playerSource)
@@ -525,8 +768,18 @@ function GCIdentityService.Resolve(playerSource)
 
     if not account then
         if accountError == 'GC-IDENTITY-ACCOUNT-NOT-FOUND' then
-            transitionOrError(playerSource, 'registration_required')
-            return GCIdentityService.GetSnapshot(playerSource)
+            local ipFingerprint, endpointError = currentIpFingerprint(playerSource)
+            if not ipFingerprint then
+                return failSession(playerSource, generation, endpointError)
+            end
+            return restoreRegistrationChallenge(
+                playerSource,
+                generation,
+                nil,
+                identifierType,
+                identifier,
+                ipFingerprint
+            )
         end
 
         return failSession(playerSource, generation, accountError)
@@ -539,8 +792,18 @@ function GCIdentityService.Resolve(playerSource)
     if type(account.email) ~= 'string' or account.email == ''
         or type(account.emailVerifiedAt) ~= 'number' then
         GCIdentityStates.BindAccount(playerSource, account)
-        transitionOrError(playerSource, 'registration_required')
-        return GCIdentityService.GetSnapshot(playerSource)
+        local ipFingerprint, endpointError = currentIpFingerprint(playerSource)
+        if not ipFingerprint then
+            return failSession(playerSource, generation, endpointError)
+        end
+        return restoreRegistrationChallenge(
+            playerSource,
+            generation,
+            account,
+            identifierType,
+            identifier,
+            ipFingerprint
+        )
     end
 
     local ipFingerprint, endpointError = currentIpFingerprint(playerSource)
@@ -606,7 +869,7 @@ function GCIdentityService.Hello(playerSource)
     return GCIdentityService.Resolve(playerSource)
 end
 
-function GCIdentityService.RegisterAccount(playerSource, payload)
+function GCIdentityService.SendRegistrationCode(playerSource, payload)
     local replayValue, replayError, replayed = replayResult(
         playerSource,
         'registration',
@@ -617,7 +880,7 @@ function GCIdentityService.RegisterAccount(playerSource, payload)
         return replayValue, replayError, true
     end
 
-    local core, coreError = coreFor(playerSource, true)
+    local core, coreError = coreFor(playerSource, false)
 
     if not core then
         return nil, coreError
@@ -683,12 +946,15 @@ function GCIdentityService.RegisterAccount(playerSource, payload)
     local result, resultError = beginVerification(playerSource, generation, {
         type = 'registration',
         email = payload.email,
+        firstName = payload.firstName,
+        lastName = payload.lastName,
         accountId = session.accountId,
         identifierType = identifierType,
         identifier = identifier,
         ipFingerprint = ipFingerprint,
         bindingKey = bindingKey,
         pendingState = 'email_verification_pending',
+        verifiedState = 'registration_verified',
         failureState = 'registration_required'
     }, false)
     recordResult(playerSource, 'registration', payload.requestId, result, resultError)
@@ -705,10 +971,11 @@ function GCIdentityService.ResendVerification(playerSource, payload)
         return replayValue, replayError, true
     end
 
-    local core, coreError = coreFor(playerSource, true)
+    local core, coreError = coreFor(playerSource, false)
     if not core then return nil, coreError end
     local session = GCIdentityStates.Get(playerSource)
     local pending = session and session.pendingVerification
+    local registration = session and session.pendingRegistration
     if not session or not pending or (
         session.state ~= 'email_verification_pending'
         and session.state ~= 'auth_verification_required'
@@ -725,12 +992,16 @@ function GCIdentityService.ResendVerification(playerSource, payload)
     local result, resultError = beginVerification(playerSource, session.generation, {
         type = pending.type,
         email = pending.email,
+        firstName = registration and registration.firstName or nil,
+        lastName = registration and registration.lastName or nil,
         accountId = pending.accountId,
         identifierType = pending.identifierType,
         identifier = pending.identifier,
         ipFingerprint = pending.ipFingerprint,
         bindingKey = pending.bindingKey,
         pendingState = pendingState,
+        verifiedState = pending.type == 'registration'
+            and 'registration_verified' or nil,
         failureState = pendingState
     }, true)
     recordResult(playerSource, 'resendVerification', payload.requestId, result, resultError)
@@ -745,7 +1016,7 @@ function GCIdentityService.VerifyEmailCode(playerSource, payload)
     )
     if replayed then return replayValue, replayError, true end
 
-    local core, coreError = coreFor(playerSource, true)
+    local core, coreError = coreFor(playerSource, false)
     if not core then return nil, coreError end
     local session = GCIdentityStates.Get(playerSource)
     local pending = session and session.pendingVerification
@@ -821,23 +1092,52 @@ function GCIdentityService.VerifyEmailCode(playerSource, payload)
         return nil, code
     end
 
-    local account, completionError
     if pending.type == 'registration' then
-        account, completionError = GCIdentityRepository.CompleteVerifiedRegistration(
-            challenge.id,
-            pending.accountId,
-            challenge.email,
-            identifierType,
-            identifier,
-            ipFingerprint
+        local registration = session.pendingRegistration
+        if not registration
+            or registration.email ~= challenge.email
+            or registration.firstName ~= challenge.firstName
+            or registration.lastName ~= challenge.lastName then
+            transitionOrError(playerSource, pendingState)
+            return nil, 'GC-IDENTITY-EMAIL-CHALLENGE-STALE'
+        end
+
+        local verified, verificationError =
+            GCIdentityRepository.MarkVerificationChallengeVerified(challenge.id)
+        if not verified then
+            return failSession(
+                playerSource,
+                generation,
+                verificationError,
+                pendingState
+            )
+        end
+
+        pending.verifiedAt = os.time()
+        registration.verified = true
+        local verifiedState, verifiedStateError = transitionOrError(
+            playerSource,
+            'registration_verified'
         )
-    else
-        account, completionError = GCIdentityRepository.CompleteVerifiedAuthentication(
-            challenge.id,
-            pending.accountId,
-            ipFingerprint
+        if not verifiedState then
+            return failSession(playerSource, generation, verifiedStateError)
+        end
+
+        local result = { verified = true }
+        GCIdentityLogger.Info(
+            'GC-IDENTITY-EMAIL-VERIFIED',
+            'Registration email verified; explicit finalization is required',
+            { source = playerSource, type = pending.type }
         )
+        recordResult(playerSource, 'verifyEmail', payload.requestId, result, nil)
+        return result, nil, false
     end
+
+    local account, completionError = GCIdentityRepository.CompleteVerifiedAuthentication(
+        challenge.id,
+        pending.accountId,
+        ipFingerprint
+    )
     if not account then
         return failSession(playerSource, generation, completionError, pendingState)
     end
@@ -857,13 +1157,237 @@ function GCIdentityService.VerifyEmailCode(playerSource, payload)
     if not snapshot then return nil, authorizeError end
 
     GCIdentityLogger.Info(
-        pending.type == 'registration'
-            and 'GC-IDENTITY-EMAIL-VERIFIED' or 'GC-IDENTITY-AUTH-NEW-IP-VERIFIED',
+        'GC-IDENTITY-AUTH-NEW-IP-VERIFIED',
         'Email verification completed',
         { source = playerSource, type = pending.type }
     )
+    local result = { authorized = true }
+    recordResult(playerSource, 'verifyEmail', payload.requestId, result, nil)
+    return result, nil, false
+end
+
+function GCIdentityService.ChangeRegistrationEmail(playerSource, payload)
+    local replayValue, replayError, replayed = replayResult(
+        playerSource,
+        'changeRegistrationEmail',
+        payload.requestId
+    )
+    if replayed then return replayValue, replayError, true end
+
+    local core, coreError = coreFor(playerSource, false)
+    if not core then return nil, coreError end
+    local session = GCIdentityStates.Get(playerSource)
+    local pending = session and session.pendingVerification
+    local registration = session and session.pendingRegistration
+    if not session or not pending or pending.type ~= 'registration'
+        or not registration or (
+            session.state ~= 'email_verification_pending'
+            and session.state ~= 'registration_verified'
+        ) then
+        return nil, 'GC-IDENTITY-EMAIL-CHANGE-INVALID'
+    end
+
+    GCIdentityRepository.InvalidateVerificationChallenge(pending.challengeId)
+    GCIdentityStates.ClearPendingVerification(playerSource)
+    GCIdentityStates.SetPendingRegistration(playerSource, {
+        firstName = registration.firstName,
+        lastName = registration.lastName,
+        email = '',
+        verified = false,
+        profileOnly = false
+    })
+    local transitioned, transitionError = transitionOrError(
+        playerSource,
+        'registration_required'
+    )
+    if not transitioned then return nil, transitionError end
+
+    local result = { changed = true }
+    recordResult(playerSource, 'changeRegistrationEmail', payload.requestId, result, nil)
+    return result, nil, false
+end
+
+function GCIdentityService.FinalizeRegistration(playerSource, payload)
+    local replayValue, replayError, replayed = replayResult(
+        playerSource,
+        'finalizeRegistration',
+        payload.requestId
+    )
+    if replayed then return replayValue, replayError, true end
+
+    local core, coreError = coreFor(playerSource, false)
+    if not core then return nil, coreError end
+    local session = GCIdentityStates.Get(playerSource)
+    local pending = session and session.pendingVerification
+    local registration = session and session.pendingRegistration
+    if not session or session.state ~= 'registration_verified'
+        or not pending or pending.type ~= 'registration'
+        or not pending.verifiedAt or not registration or not registration.verified then
+        return nil, 'GC-IDENTITY-REGISTRATION-NOT-VERIFIED'
+    end
+
+    local generation = session.generation
+    local transitioned, transitionError = transitionOrError(
+        playerSource,
+        'registration_finalizing'
+    )
+    if not transitioned then return nil, transitionError end
+
+    local identifierType, identifier, identifierError = trustedIdentifier(core, playerSource)
+    if not identifier then
+        return failSession(
+            playerSource,
+            generation,
+            identifierError,
+            'registration_verified'
+        )
+    end
+    local ipFingerprint, endpointError = currentIpFingerprint(playerSource)
+    if not ipFingerprint then
+        return failSession(
+            playerSource,
+            generation,
+            endpointError,
+            'registration_verified'
+        )
+    end
+    local bindingKey = challengeBinding(
+        'registration',
+        identifierType,
+        identifier,
+        ipFingerprint
+    )
+    if not GCIdentityCrypto.ConstantTimeEquals(bindingKey or '', pending.bindingKey) then
+        return failSession(
+            playerSource,
+            generation,
+            'GC-IDENTITY-EMAIL-CHALLENGE-STALE',
+            'registration_verified'
+        )
+    end
+
+    local challenge, challengeError = GCIdentityRepository.GetVerificationChallenge(
+        pending.bindingKey,
+        'registration'
+    )
+    if not challenge or challenge.id ~= pending.challengeId
+        or not challenge.verifiedAt or challenge.expiresAt <= os.time()
+        or challenge.email ~= registration.email
+        or challenge.firstName ~= registration.firstName
+        or challenge.lastName ~= registration.lastName then
+        return failSession(
+            playerSource,
+            generation,
+            challengeError or 'GC-IDENTITY-REGISTRATION-NOT-VERIFIED',
+            'registration_verified'
+        )
+    end
+
+    local account, completionError = GCIdentityRepository.CompleteVerifiedRegistration(
+        challenge.id,
+        pending.accountId,
+        registration.email,
+        registration.firstName,
+        registration.lastName,
+        identifierType,
+        identifier,
+        ipFingerprint
+    )
+    if not account then
+        return failSession(
+            playerSource,
+            generation,
+            completionError or 'GC-IDENTITY-REGISTRATION-FINALIZE-FAILED',
+            'registration_verified'
+        )
+    end
+
+    local characters, charactersError = GCIdentityRepository.GetCharacters(account.id)
+    if not characters then
+        return failSession(playerSource, generation, charactersError)
+    end
+    local snapshot, authorizeError = commitAuthorized(
+        playerSource,
+        generation,
+        account,
+        characters,
+        identifierType,
+        identifier
+    )
+    if not snapshot then return nil, authorizeError end
+
     local accountDto = publicAccount(account)
-    recordResult(playerSource, 'verifyEmail', payload.requestId, accountDto, nil)
+    recordResult(playerSource, 'finalizeRegistration', payload.requestId, accountDto, nil)
+    return accountDto, nil, false
+end
+
+function GCIdentityService.CompleteProfile(playerSource, payload)
+    local replayValue, replayError, replayed = replayResult(
+        playerSource,
+        'completeProfile',
+        payload.requestId
+    )
+    if replayed then return replayValue, replayError, true end
+
+    local core, coreError = coreFor(playerSource, false)
+    if not core then return nil, coreError end
+    local session = GCIdentityStates.Get(playerSource)
+    if not session or session.state ~= 'profile_completion_required'
+        or not session.account or type(session.account.emailVerifiedAt) ~= 'number' then
+        return nil, 'GC-IDENTITY-PROFILE-INCOMPLETE'
+    end
+
+    local generation = session.generation
+    local transitioned, transitionError = transitionOrError(
+        playerSource,
+        'registration_finalizing'
+    )
+    if not transitioned then return nil, transitionError end
+
+    local identifierType, identifier, identifierError = trustedIdentifier(core, playerSource)
+    if not identifier then
+        return failSession(
+            playerSource,
+            generation,
+            identifierError,
+            'profile_completion_required'
+        )
+    end
+    local ipFingerprint, endpointError = currentIpFingerprint(playerSource)
+    if not ipFingerprint or session.account.lastIpFingerprint ~= ipFingerprint then
+        return failSession(
+            playerSource,
+            generation,
+            endpointError or 'GC-IDENTITY-EMAIL-VERIFICATION-REQUIRED',
+            'profile_completion_required'
+        )
+    end
+
+    local account, updateError = GCIdentityRepository.UpdateAccountRegisteredName(
+        session.account.id,
+        payload.firstName,
+        payload.lastName
+    )
+    if not account then
+        return failSession(
+            playerSource,
+            generation,
+            updateError,
+            'profile_completion_required'
+        )
+    end
+
+    local snapshot, authorizeError = commitAuthorized(
+        playerSource,
+        generation,
+        account,
+        session.characters,
+        identifierType,
+        identifier
+    )
+    if not snapshot then return nil, authorizeError end
+    local accountDto = publicAccount(account)
+    recordResult(playerSource, 'completeProfile', payload.requestId, accountDto, nil)
     return accountDto, nil, false
 end
 

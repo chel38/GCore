@@ -14,8 +14,8 @@ When `gc_core` starts, the following steps run:
 ## Expected messages
 
 ```text
-[GreenCore] [INFO] gc_core server bootstrap loaded | version=0.1.4-alpha
-[GreenCore] [INFO] gc_core 0.1.4-alpha started successfully
+[GreenCore] [INFO] gc_core server bootstrap loaded | version=0.1.5-alpha
+[GreenCore] [INFO] gc_core 0.1.5-alpha started successfully
 ```
 
 ## What happens when a player connects
@@ -65,7 +65,7 @@ print(exports.gc_core:GetVersionString())
 It should print:
 
 ```text
-0.1.4-alpha
+0.1.5-alpha
 ```
 
 ## Possible issues

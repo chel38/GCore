@@ -48,6 +48,10 @@ local function trim(value)
     return value:match('^%s*(.-)%s*$')
 end
 
+local function collapseSpaces(value)
+    return trim(value):gsub('%s+', ' ')
+end
+
 local function validDomain(domain)
     if not domain:find('.', 1, true)
         or domain:find('..', 1, true)
@@ -95,6 +99,28 @@ function GCIdentityValidation.NormalizeEmail(value)
     return email
 end
 
+function GCIdentityValidation.NormalizeFullName(value)
+    if type(value) ~= 'string' or value:match('[%z\1-\31\127]') then
+        return nil
+    end
+
+    local normalized = collapseSpaces(value)
+    local firstName, lastName = normalized:match('^([A-Za-z]+) ([A-Za-z]+)$')
+    if not firstName or not lastName
+        or #firstName < GCIdentityConfig.accounts.firstNameMinBytes
+        or #firstName > GCIdentityConfig.accounts.firstNameMaxBytes
+        or #lastName < GCIdentityConfig.accounts.lastNameMinBytes
+        or #lastName > GCIdentityConfig.accounts.lastNameMaxBytes then
+        return nil
+    end
+
+    return {
+        firstName = firstName,
+        lastName = lastName,
+        displayName = firstName .. ' ' .. lastName
+    }
+end
+
 local function normalizeName(value)
     if type(value) ~= 'string' then
         return nil
@@ -128,7 +154,8 @@ function GCIdentityValidation.ValidateRegistration(payload)
     if not exactKeys(payload, {
         protocolVersion = true,
         requestId = true,
-        email = true
+        email = true,
+        fullName = true
     }) then
         return nil, 'GC-IDENTITY-PAYLOAD-SCHEMA'
     end
@@ -142,15 +169,76 @@ function GCIdentityValidation.ValidateRegistration(payload)
     end
 
     local email = GCIdentityValidation.NormalizeEmail(payload.email)
+    local name = GCIdentityValidation.NormalizeFullName(payload.fullName)
 
     if not email then
         return nil, 'GC-IDENTITY-REGISTRATION-INVALID'
+    end
+    if not name then
+        return nil, 'GC-IDENTITY-NAME-INVALID'
     end
 
     return {
         protocolVersion = payload.protocolVersion,
         requestId = payload.requestId,
-        email = email
+        email = email,
+        firstName = name.firstName,
+        lastName = name.lastName,
+        displayName = name.displayName
+    }
+end
+
+local function validateRequestOnly(payload)
+    if not exactKeys(payload, {
+        protocolVersion = true,
+        requestId = true
+    }) then
+        return nil, 'GC-IDENTITY-PAYLOAD-SCHEMA'
+    end
+    if not validateProtocol(payload.protocolVersion) then
+        return nil, 'GC-IDENTITY-PROTOCOL-MISMATCH'
+    end
+    if not validateRequestId(payload.requestId) then
+        return nil, 'GC-IDENTITY-PAYLOAD-REQUEST-ID'
+    end
+    return {
+        protocolVersion = payload.protocolVersion,
+        requestId = payload.requestId
+    }
+end
+
+function GCIdentityValidation.ValidateChangeRegistrationEmail(payload)
+    return validateRequestOnly(payload)
+end
+
+function GCIdentityValidation.ValidateFinalizeRegistration(payload)
+    return validateRequestOnly(payload)
+end
+
+function GCIdentityValidation.ValidateCompleteProfile(payload)
+    if not exactKeys(payload, {
+        protocolVersion = true,
+        requestId = true,
+        fullName = true
+    }) then
+        return nil, 'GC-IDENTITY-PAYLOAD-SCHEMA'
+    end
+    if not validateProtocol(payload.protocolVersion) then
+        return nil, 'GC-IDENTITY-PROTOCOL-MISMATCH'
+    end
+    if not validateRequestId(payload.requestId) then
+        return nil, 'GC-IDENTITY-PAYLOAD-REQUEST-ID'
+    end
+    local name = GCIdentityValidation.NormalizeFullName(payload.fullName)
+    if not name then
+        return nil, 'GC-IDENTITY-NAME-INVALID'
+    end
+    return {
+        protocolVersion = payload.protocolVersion,
+        requestId = payload.requestId,
+        firstName = name.firstName,
+        lastName = name.lastName,
+        displayName = name.displayName
     }
 end
 

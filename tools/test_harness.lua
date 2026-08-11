@@ -121,6 +121,16 @@ function GCTestHarness.EmitServerClientEvent(eventName, payload)
     return result
 end
 
+function GCTestHarness.EmitNetworkEvent(eventName, playerSource, payload)
+    local handler = registeredClientHandlers[eventName]
+    if not handler then return nil end
+    local previousSource = source
+    source = playerSource
+    local result = handler(payload)
+    source = previousSource
+    return result
+end
+
 function GCTestHarness.GetLoadingScreenShutdowns()
     return {
         nui = loadingScreenShutdowns.nui,
@@ -189,6 +199,7 @@ local runtimeFiles = {
     'server/security.lua',
     'server/ped_provider.lua',
     'server/spawn_location.lua',
+    'server/spawn_policy.lua',
     'server/connection.lua',
     'server/spawn_retry.lua',
     'server/spawn.lua',
@@ -205,6 +216,7 @@ local testFiles = {
     'tests/sessions_test.lua',
     'tests/connection_test.lua',
     'tests/spawn_test.lua',
+    'tests/spawn_mode_test.lua',
     'tests/spawn_verification_integration_test.lua',
     'tests/protocol_test.lua',
     'tests/ped_provider_test.lua',

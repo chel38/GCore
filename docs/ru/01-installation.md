@@ -46,7 +46,7 @@ ensure gc_core
 Найдите сообщение:
 
 ```text
-[GreenCore] [INFO] gc_core 0.1.4-alpha started successfully
+[GreenCore] [INFO] gc_core 0.1.5-alpha started successfully
 ```
 
 ## Инструкции для Windows

@@ -4,8 +4,13 @@ export type IdentityState =
   | 'registration_required'
   | 'registering'
   | 'email_verification_pending'
+  | 'registration_verified'
+  | 'registration_finalizing'
+  | 'profile_completion_required'
   | 'auth_verification_required'
   | 'authorized'
+  | 'spawn_releasing'
+  | 'post_spawn_identity'
   | 'character_required'
   | 'character_selected'
   | 'ready'
@@ -15,6 +20,9 @@ export type IdentityState =
 export interface AccountDto {
   id: number
   email: string
+  firstName: string
+  lastName: string
+  displayName: string
   status: string
   createdAt: number
 }
@@ -28,6 +36,7 @@ export interface CharacterDto {
 
 export interface IdentitySnapshot {
   protocolVersion: number
+  locale: 'ru' | 'en'
   state: IdentityState
   account: AccountDto | null
   characters: CharacterDto[]
@@ -39,6 +48,12 @@ export interface IdentitySnapshot {
     maskedEmail: string
     expiresIn: number
     resendIn: number
+  } | null
+  registration?: {
+    fullName: string
+    email: string
+    emailVerified: boolean
+    profileOnly: boolean
   } | null
 }
 

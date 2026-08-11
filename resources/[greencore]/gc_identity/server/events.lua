@@ -81,10 +81,10 @@ registerIngress(
 )
 
 registerIngress(
-    GCIdentityEvents.server.registerAccount,
+    GCIdentityEvents.server.sendRegistrationCode,
     'registration',
     GCIdentityValidation.ValidateRegistration,
-    GCIdentityService.RegisterAccount
+    GCIdentityService.SendRegistrationCode
 )
 
 registerIngress(
@@ -99,6 +99,27 @@ registerIngress(
     'resendVerification',
     GCIdentityValidation.ValidateResendVerification,
     GCIdentityService.ResendVerification
+)
+
+registerIngress(
+    GCIdentityEvents.server.changeRegistrationEmail,
+    'changeRegistrationEmail',
+    GCIdentityValidation.ValidateChangeRegistrationEmail,
+    GCIdentityService.ChangeRegistrationEmail
+)
+
+registerIngress(
+    GCIdentityEvents.server.finalizeRegistration,
+    'finalizeRegistration',
+    GCIdentityValidation.ValidateFinalizeRegistration,
+    GCIdentityService.FinalizeRegistration
+)
+
+registerIngress(
+    GCIdentityEvents.server.completeProfile,
+    'completeProfile',
+    GCIdentityValidation.ValidateCompleteProfile,
+    GCIdentityService.CompleteProfile
 )
 
 RegisterNetEvent(GCIdentityEvents.server.clientFailure, function(payload)
@@ -160,6 +181,10 @@ end)
 
 AddEventHandler('playerDropped', function()
     GCIdentityService.Disconnect(source)
+end)
+
+AddEventHandler('gc_core:hook:playerSpawned', function(playerSource)
+    GCIdentityService.HandleCoreSpawned(playerSource)
 end)
 
 AddEventHandler('onResourceStop', function(resourceName)

@@ -195,9 +195,14 @@ end
 
 function GCValidation.ConnectionAccepted(payload)
     if type(payload) ~= 'table'
-        or not onlyKeys(payload, { apiVersion = true, protocolVersion = true })
+        or not onlyKeys(payload, {
+            apiVersion = true,
+            protocolVersion = true,
+            spawnMode = true
+        })
         or not GCUtils.IsInteger(payload.apiVersion)
-        or not GCUtils.IsInteger(payload.protocolVersion) then
+        or not GCUtils.IsInteger(payload.protocolVersion)
+        or (payload.spawnMode ~= 'automatic' and payload.spawnMode ~= 'manual') then
         return false, 'GC-PAYLOAD-SCHEMA-001'
     end
 

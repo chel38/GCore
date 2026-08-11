@@ -74,10 +74,12 @@ GCModuleTest.Register('identity.duplicate_requests_are_idempotent', 'integration
     local registration = {
         protocolVersion = GCIdentityVersion.protocol,
         requestId = 'register_2400',
+        firstName = 'Duplicate',
+        lastName = 'Player',
         email = 'duplicate@example.test'
     }
-    local firstAccount, firstError, firstReplay = GCIdentityService.RegisterAccount(24, registration)
-    local secondAccount, secondError, secondReplay = GCIdentityService.RegisterAccount(24, registration)
+    local firstAccount, firstError, firstReplay = GCIdentityService.SendRegistrationCode(24, registration)
+    local secondAccount, secondError, secondReplay = GCIdentityService.SendRegistrationCode(24, registration)
     GCModuleTest.ExpectNil(firstError, 'first registration succeeds')
     GCModuleTest.ExpectFalse(firstReplay, 'first registration is not replay')
     GCModuleTest.ExpectNil(secondError, 'duplicate registration is safe')
@@ -91,8 +93,20 @@ GCModuleTest.Register('identity.duplicate_requests_are_idempotent', 'integration
         requestId = 'verify_2400',
         code = delivered.code
     })
-    GCModuleTest.ExpectNil(verificationError, 'verification completes registration')
-    GCModuleTest.ExpectNotNil(verified, 'verified account DTO returned')
+    GCModuleTest.ExpectNil(verificationError, 'verification marks email verified')
+    GCModuleTest.ExpectTrue(verified.verified, 'verification does not create an account')
+    local finalized, finalizeError = GCIdentityService.FinalizeRegistration(24, {
+        protocolVersion = GCIdentityVersion.protocol,
+        requestId = 'finalize_2400'
+    })
+    GCModuleTest.ExpectNil(finalizeError, 'explicit finalization creates the account')
+    GCModuleTest.ExpectEqual(finalized.displayName, 'Duplicate Player', 'finalization returns public account DTO')
+    GCModuleTest.ExpectEqual(
+        GCIdentityService.GetSnapshot(24).state,
+        'spawn_releasing',
+        'finalization releases one spawn'
+    )
+    IdentityTest.CompleteCoreSpawn(24)
 
     local payload = createPayload('request_2401')
     local first, createError, firstCreateReplay = GCIdentityService.CreateCharacter(24, payload)

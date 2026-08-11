@@ -6,6 +6,8 @@ local ACCOUNT_SELECT = [[
     SELECT
         a.`id`,
         a.`email`,
+        a.`first_name` AS `firstName`,
+        a.`last_name` AS `lastName`,
         UNIX_TIMESTAMP(a.`email_verified_at`) AS `emailVerifiedAt`,
         a.`last_ip_fingerprint` AS `lastIpFingerprint`,
         a.`status`,
@@ -26,6 +28,8 @@ local function normalizeAccount(row)
     return {
         id = tonumber(row.id),
         email = row.email,
+        firstName = row.firstName,
+        lastName = row.lastName,
         emailVerifiedAt = row.emailVerifiedAt and tonumber(row.emailVerifiedAt) or nil,
         lastIpFingerprint = row.lastIpFingerprint,
         status = row.status,
@@ -541,6 +545,8 @@ local function normalizeChallenge(row)
         accountId = row.accountId and tonumber(row.accountId) or nil,
         bindingKey = row.bindingKey,
         email = row.email,
+        firstName = row.firstName,
+        lastName = row.lastName,
         type = row.type,
         codeHash = row.codeHash,
         expiresAt = tonumber(row.expiresAt),
@@ -548,6 +554,7 @@ local function normalizeChallenge(row)
         maxAttempts = tonumber(row.maxAttempts),
         createdAt = tonumber(row.createdAt),
         lastSentAt = tonumber(row.lastSentAt),
+        verifiedAt = row.verifiedAt and tonumber(row.verifiedAt) or nil,
         consumedAt = row.consumedAt and tonumber(row.consumedAt) or nil
     }
 end
@@ -582,13 +589,16 @@ function OxMySQLRepository.CreateVerificationChallenge(challenge)
 
         local inserted = query([[
             INSERT INTO `gc_identity_verification_challenges`
-                (`account_id`, `binding_key`, `email`, `verification_type`, `code_hash`,
+                (`account_id`, `binding_key`, `email`, `pending_first_name`,
+                 `pending_last_name`, `verification_type`, `code_hash`,
                  `expires_at`, `attempts`, `max_attempts`, `created_at`, `last_sent_at`)
-            VALUES (NULLIF(?, 0), ?, ?, ?, ?, FROM_UNIXTIME(?), 0, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))
+            VALUES (NULLIF(?, 0), ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), 0, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))
         ]], {
             challenge.accountId or 0,
             challenge.bindingKey,
             challenge.email,
+            challenge.firstName,
+            challenge.lastName,
             challenge.type,
             challenge.codeHash,
             challenge.expiresAt,
@@ -617,11 +627,14 @@ function OxMySQLRepository.GetVerificationChallenge(bindingKey, verificationType
     local row, queryError = await(MySQL.single, [[
         SELECT
             `id`, `account_id` AS `accountId`, `binding_key` AS `bindingKey`,
-            `email`, `verification_type` AS `type`, `code_hash` AS `codeHash`,
+            `email`, `pending_first_name` AS `firstName`,
+            `pending_last_name` AS `lastName`,
+            `verification_type` AS `type`, `code_hash` AS `codeHash`,
             UNIX_TIMESTAMP(`expires_at`) AS `expiresAt`,
             `attempts`, `max_attempts` AS `maxAttempts`,
             UNIX_TIMESTAMP(`created_at`) AS `createdAt`,
             UNIX_TIMESTAMP(`last_sent_at`) AS `lastSentAt`,
+            UNIX_TIMESTAMP(`verified_at`) AS `verifiedAt`,
             UNIX_TIMESTAMP(`consumed_at`) AS `consumedAt`
         FROM `gc_identity_verification_challenges`
         WHERE `binding_key` = ? AND `verification_type` = ?
@@ -666,10 +679,44 @@ function OxMySQLRepository.InvalidateVerificationChallenge(challengeId)
     return tonumber(result) == 1
 end
 
+function OxMySQLRepository.MarkVerificationChallengeVerified(challengeId)
+    local result, queryError = await(MySQL.update, [[
+        UPDATE `gc_identity_verification_challenges`
+        SET `verified_at` = COALESCE(`verified_at`, UTC_TIMESTAMP(3))
+        WHERE `id` = ? AND `consumed_at` IS NULL
+            AND `expires_at` > UTC_TIMESTAMP(3)
+            AND `attempts` < `max_attempts`
+    ]], { challengeId })
+
+    if queryError then
+        return false, queryError
+    end
+    return tonumber(result) == 1, tonumber(result) == 1
+        and nil or 'GC-IDENTITY-EMAIL-CHALLENGE-STALE'
+end
+
+function OxMySQLRepository.UpdateAccountRegisteredName(accountId, firstName, lastName)
+    local result, queryError = await(MySQL.update, [[
+        UPDATE `gc_accounts`
+        SET `first_name` = ?, `last_name` = ?, `updated_at` = UTC_TIMESTAMP(3)
+        WHERE `id` = ? AND `status` = 'active'
+    ]], { firstName, lastName, accountId })
+
+    if queryError then
+        return nil, queryError
+    end
+    if tonumber(result) ~= 1 then
+        return nil, 'GC-IDENTITY-ACCOUNT-NOT-FOUND'
+    end
+    return findAccountById(accountId)
+end
+
 function OxMySQLRepository.CompleteVerifiedRegistration(
     challengeId,
     accountId,
     email,
+    firstName,
+    lastName,
     identifierType,
     identifier,
     ipFingerprint
@@ -678,11 +725,12 @@ function OxMySQLRepository.CompleteVerifiedRegistration(
     local domainError
     local committed, transactionError = startTransaction(function(query)
         local challenges = query([[
-            SELECT `id`, `email`, `account_id`
+            SELECT `id`, `email`, `account_id`, `pending_first_name`,
+                `pending_last_name`
             FROM `gc_identity_verification_challenges`
             WHERE `id` = ? AND `verification_type` = 'registration'
                 AND `consumed_at` IS NULL AND `expires_at` > UTC_TIMESTAMP(3)
-                AND `attempts` < `max_attempts`
+                AND `attempts` < `max_attempts` AND `verified_at` IS NOT NULL
             LIMIT 1 FOR UPDATE
         ]], { challengeId })
 
@@ -690,6 +738,8 @@ function OxMySQLRepository.CompleteVerifiedRegistration(
             and challenges[1].account_id and tonumber(challenges[1].account_id) or nil
         if not challenges or not challenges[1]
             or challenges[1].email ~= email
+            or challenges[1].pending_first_name ~= firstName
+            or challenges[1].pending_last_name ~= lastName
             or storedAccountId ~= accountId then
             domainError = 'GC-IDENTITY-EMAIL-CHALLENGE-STALE'
             return false
@@ -721,11 +771,12 @@ function OxMySQLRepository.CompleteVerifiedRegistration(
 
             local updated = query([[
                 UPDATE `gc_accounts`
-                SET `email` = ?, `email_verified_at` = UTC_TIMESTAMP(3),
+                SET `email` = ?, `first_name` = ?, `last_name` = ?,
+                    `email_verified_at` = UTC_TIMESTAMP(3),
                     `last_ip_fingerprint` = ?, `updated_at` = UTC_TIMESTAMP(3),
                     `last_login_at` = UTC_TIMESTAMP(3)
                 WHERE `id` = ? AND `status` = 'active'
-            ]], { email, ipFingerprint, accountId })
+            ]], { email, firstName, lastName, ipFingerprint, accountId })
             if not updated or updated.affectedRows ~= 1 then
                 return false
             end
@@ -742,11 +793,12 @@ function OxMySQLRepository.CompleteVerifiedRegistration(
 
             local inserted = query([[
                 INSERT INTO `gc_accounts`
-                    (`email`, `email_verified_at`, `last_ip_fingerprint`, `status`,
+                    (`email`, `first_name`, `last_name`, `email_verified_at`,
+                     `last_ip_fingerprint`, `status`,
                      `created_at`, `updated_at`, `last_login_at`)
-                VALUES (?, UTC_TIMESTAMP(3), ?, 'active', UTC_TIMESTAMP(3),
+                VALUES (?, ?, ?, UTC_TIMESTAMP(3), ?, 'active', UTC_TIMESTAMP(3),
                         UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))
-            ]], { email, ipFingerprint })
+            ]], { email, firstName, lastName, ipFingerprint })
             if not inserted or not inserted.insertId then
                 return false
             end

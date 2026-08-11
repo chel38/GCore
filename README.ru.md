@@ -22,17 +22,17 @@ GreenCore — это минимальный модульный движок дл
 
 ## Статус разработки
 
-**0.1.4-alpha** — исправление жизненного цикла клиентской загрузки.
+**0.1.5-alpha** — безопасная pre-spawn авторизация и ручной spawn gate.
 
-Core Resource Version: `0.1.4-alpha`
+Core Resource Version: `0.1.5-alpha`
 
 Core API Version: `1`
 
-Network Protocol Version: `1`
+Network Protocol Version: `2`
 
 Core API Status: **Stable for module development**
 
-Модульная экосистема: `gc_example 0.1.0-alpha`, `gc_identity 0.3.0-alpha`, локальный `mail-service 0.1.0-alpha`.
+Модульная экосистема: `gc_example 0.1.0-alpha`, `gc_identity 0.4.0-alpha`, локальный `mail-service 0.1.0-alpha`.
 
 ## Возможности версии
 
@@ -82,6 +82,7 @@ Core API Status: **Stable for module development**
 
 ```cfg
 set mysql_connection_string "mysql://USER:PASSWORD@127.0.0.1:3306/gcore?charset=utf8mb4"
+set gcore_spawn_mode manual
 ensure oxmysql
 ensure gc_core
 ensure gc_example
@@ -93,7 +94,7 @@ ensure gc_identity
 8. Найдите сообщение:
 
 ```text
-[GreenCore] [INFO] gc_core 0.1.4-alpha started successfully
+[GreenCore] [INFO] gc_core 0.1.5-alpha started successfully
 ```
 
 ## Конфигурация
@@ -117,8 +118,9 @@ resources/[greencore]/
 | ------------------------ | -------------- | ------------------------- |
 | `GetApiVersion`          | number         | Версия API                |
 | `GetProtocolVersion`     | number         | Версия протокола          |
+| `GetSpawnMode`           | string         | `automatic` или `manual`  |
 | `GetVersion`             | table          | Версия `gc_core`          |
-| `GetVersionString`       | string         | Строка `0.1.4-alpha`      |
+| `GetVersionString`       | string         | Строка `0.1.5-alpha`      |
 | `IsPlayerConnected`      | boolean        | Проверяет сессию          |
 | `IsPlayerReady`          | boolean        | Проверяет готовность      |
 | `IsPlayerSpawned`        | boolean        | Проверяет спавн           |
@@ -140,6 +142,7 @@ resources/[greencore]/
 - [Контракт модулей v1](docs/ru/module-contract.md)
 - [Граф зависимостей модулей](docs/ru/module-dependencies.md)
 - [Проектирование gc_identity](docs/ru/modules/gc_identity/design.md)
+- [Pre-spawn регистрация и безопасная авторизация](docs/ru/modules/gc_identity/pre-spawn-registration.md)
 - [Аудит NUI lifecycle gc_identity](docs/ru/modules/gc_identity/nui-lifecycle-audit.md)
 - [Отчёт persistent identity](docs/ru/modules/gc_identity/implementation-report.md)
 - [Email verification](docs/ru/modules/gc_identity/email-verification.md)

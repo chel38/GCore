@@ -57,6 +57,7 @@ local allowedTransitions = {
     -- EN: in the world) or to spawn_pending (a re-spawn is required).
     resyncing = {
         'spawned',
+        'client_ready',
         'spawn_pending',
         'error',
         'disconnecting'

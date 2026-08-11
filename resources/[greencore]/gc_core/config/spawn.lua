@@ -8,6 +8,14 @@ GCConfig = GCConfig or {}
 -- RU: Настройки спавна.
 -- EN: Spawn settings.
 GCConfig.Spawn = {
+    -- RU: automatic сохраняет standalone-поведение gc_core. В полном GCore
+    -- RU: server convar gcore_spawn_mode должен быть manual, чтобы доверенный
+    -- RU: серверный модуль явно разрешал spawn через Public API.
+    -- EN: automatic preserves standalone gc_core behavior. A full GCore server
+    -- EN: should set gcore_spawn_mode to manual so a trusted server module
+    -- EN: explicitly releases spawn through the Public API.
+    mode = 'automatic',
+
     -- RU: Точка спавна по умолчанию. Координаты не жёстко прописаны в логике.
     -- EN: Default spawn point. Coordinates are not hardcoded in the logic.
     default = {

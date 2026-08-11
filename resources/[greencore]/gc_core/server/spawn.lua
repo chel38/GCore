@@ -381,6 +381,16 @@ function GCSpawn.Confirm(playerSource, decisionId)
         state = 'spawned'
     })
 
+    -- RU: Публичный server-local hook сообщает модулям только подтверждённый
+    -- RU: authoritative lifecycle факт. Он не передаёт внутренний spawn decision.
+    -- EN: The public server-local hook exposes only the confirmed authoritative
+    -- EN: lifecycle fact and never leaks the internal spawn decision.
+    TriggerEvent(
+        GCEvents.Hooks.playerSpawned,
+        playerSource,
+        GCSessions.GetPublicDTO(playerSource)
+    )
+
     return true
 end
 

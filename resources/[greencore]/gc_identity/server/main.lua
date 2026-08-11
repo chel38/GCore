@@ -18,6 +18,19 @@ end
 
 local function startIdentity()
     GCIdentityService.SetAvailable(false)
+
+    local spawnModeOk, spawnMode = pcall(function()
+        return exports['gc_core']:GetSpawnMode()
+    end)
+    if not spawnModeOk or spawnMode ~= 'manual' then
+        GCIdentityLogger.Error(
+            'GC-IDENTITY-SPAWN-MODE-MISCONFIGURED',
+            'gc_identity requires gc_core manual spawn mode; set gcore_spawn_mode manual',
+            { actual = spawnModeOk and tostring(spawnMode) or 'unavailable' }
+        )
+        return
+    end
+
     local databaseReady
     local databaseError
 

@@ -35,7 +35,7 @@ local function validateCoreApi()
 end
 ```
 
-Требуйте API `1`, а не ровно resource `0.1.4-alpha`. Resource и API versions
+Требуйте API `1`, а не ровно resource `0.1.5-alpha`. Resource и API versions
 разделены, чтобы совместимые patch/minor releases не останавливали модули.
 
 ## Разрешено
