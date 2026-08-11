@@ -13,7 +13,7 @@ Or as a layer tree:
 ```text
 gc_core 0.1.5-alpha (API 1, protocol 2)
 ├── gc_example 0.1.0-alpha (reference, no public API)
-└── gc_identity 0.4.0-alpha (Identity API 1, protocol 3, manual core spawn mode, oxmysql/MariaDB + localhost mail-service)
+└── gc_identity 0.4.1-alpha (Identity API 1, protocol 3, manual core spawn mode, oxmysql/MariaDB + localhost mail-service)
 ```
 
 `gc_core` has no dependency on either module. `gc_example` and `gc_identity` do

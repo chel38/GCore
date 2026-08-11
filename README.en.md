@@ -33,7 +33,7 @@ Network Protocol Version: `2`
 
 Core API Status: **Stable for module development**
 
-Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.4.0-alpha`, local `mail-service 0.1.0-alpha`.
+Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.4.1-alpha`, local `mail-service 0.1.0-alpha`.
 
 ## Version features
 

@@ -32,7 +32,7 @@ Network Protocol Version: `2`
 
 Core API Status: **Stable for module development**
 
-Модульная экосистема: `gc_example 0.1.0-alpha`, `gc_identity 0.4.0-alpha`, локальный `mail-service 0.1.0-alpha`.
+Модульная экосистема: `gc_example 0.1.0-alpha`, `gc_identity 0.4.1-alpha`, локальный `mail-service 0.1.0-alpha`.
 
 ## Возможности версии
 

@@ -1,7 +1,7 @@
 # Pre-spawn registration and secure authorization
 
 Current contract: `gc_core 0.1.5-alpha` (API 1, protocol 2) and
-`gc_identity 0.4.0-alpha` (Identity API 1, protocol 3).
+`gc_identity 0.4.1-alpha` (Identity API 1, protocol 3).
 
 ## Primary guarantee
 

@@ -37,6 +37,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   повторно проверяет server-owned identifier, endpoint fingerprint, challenge,
   имя и email внутри атомарной repository transaction.
 
+### Исправлено / Fixed
+
+- `gc_identity 0.4.1-alpha` использует один непрозрачный fullscreen
+  `IdentityShell` и не показывает мир до authoritative spawn handoff.
+- Централизованный idempotent cleanup полностью удаляет DOM overlay и вместе
+  снимает NUI focus, keep-input и identity-owned PED freeze при ready, exit,
+  resource/core stop и CEF reload.
+- Исправлен recovery race при смене модели: cleanup снимает identity-owned
+  freeze как со старого handle, так и с актуального PED, поэтому после restart
+  персонаж не остаётся обездвиженным.
+- Удалены fullscreen `backdrop-filter` compositor layers и постоянный скрытый
+  frontend interval — источники black rectangle/остаточного NUI риска.
+
 ## [0.1.4-alpha] - 2026-08-10
 
 ### Исправлено / Fixed

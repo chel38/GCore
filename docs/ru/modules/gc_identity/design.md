@@ -1,4 +1,4 @@
-# gc_identity 0.4.0-alpha — реализованный design
+# gc_identity 0.4.1-alpha — реализованный design
 
 Статус: реализовано и проверено automated tests; актуальный runtime smoke-test
 документируется отдельно. Identity API 1 совместим; protocol 3 добавляет

@@ -13,7 +13,7 @@ gc_identity ───────→ gc_core Public API v1
 ```text
 gc_core 0.1.5-alpha (API 1, protocol 2)
 ├── gc_example 0.1.0-alpha (reference, без Public API)
-└── gc_identity 0.4.0-alpha (Identity API 1, protocol 3, manual core spawn mode, oxmysql/MariaDB + localhost mail-service)
+└── gc_identity 0.4.1-alpha (Identity API 1, protocol 3, manual core spawn mode, oxmysql/MariaDB + localhost mail-service)
 ```
 
 `gc_core` не зависит от модулей. `gc_example` и `gc_identity` также не зависят

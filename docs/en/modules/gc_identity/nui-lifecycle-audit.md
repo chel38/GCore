@@ -1,152 +1,180 @@
-# gc_identity NUI and connection lifecycle audit
+# Full gc_identity NUI and lifecycle audit
 
-Audit date: 2026-08-11
+Date: 2026-08-11
 
-> Historical black-screen audit for `0.2.1-alpha`. The fixes remain relevant,
-> while the current email-code and new-IP screens are documented in
-> [Email verification](email-verification.md).
+Baseline: `2486af064a77f234a392eda8215e6fa113ed1397`
 
-Audited baseline: `293c92238368a5a8c08eaecccd7b0b610ce5f08d`
+Result: `gc_identity 0.4.1-alpha`, Identity API 1, protocol 3.
 
-Fixed identity version: `0.2.1-alpha` (API 1, protocol 1). Core remains
-`0.1.4-alpha` (API 1, protocol 1).
+## NUI inventory
 
-## Root cause
+| Resource | NUI | Purpose | Fullscreen | Focus | Lifecycle |
+| --- | --- | --- | --- | --- | --- |
+| `gc_identity` | Yes | Registration, email/new-IP verification, spawn transition, character selection | Yes | Yes, non-ready only | Active |
+| `gc_core` | No | Loading and server-authoritative spawn | — | No | Active |
+| `gc_example` | No | Reference module | — | No | Active |
 
-FiveM eagerly loads every declared `ui_page`. Two presentation bugs combined:
+The repository contains exactly one `ui_page`:
+`gc_identity/web/dist/index.html`. Vite uses `base: './'`; the HTML and hashed
+JS/CSS assets exist and are included by `fxmanifest.lua`. There are no external
+CDNs, videos, WebGL surfaces, or remote images.
 
-1. the old frontend called `renderLoading()` during its first mount while no
-   Lua/server snapshot existed, painting a nearly opaque viewport-sized shell;
-2. the production document declared `color-scheme: dark` even while the root was
-   empty. In the real FiveM CEF compositor that inactive document canvas remained
-   black instead of becoming a transparent overlay.
+## Root causes found
 
-The second condition was isolated in the live runtime: with an already spawned
-player, `ensure gc_identity` alone produced the black layer and `stop gc_identity`
-removed it. Core was already `spawned`, the ped existed at the verified position,
-and the game screen had faded in. This proved that spawn and fade were not the
-remaining cause.
+1. The old shell ended in a translucent `linear-gradient(... / .94, ... /
+   .96)`, allowing the GTA renderer to leak through mandatory pre-spawn UI.
+2. The shell used only `min-height: 100vh`; it was not fixed through
+   `position: fixed; inset: 0`, so coverage depended on document layout.
+3. Every view rendered its own fullscreen `<section>`, so transitions had no
+   single visual-layer cleanup invariant.
+4. The card and exit overlay used `backdrop-filter`. Fullscreen CEF compositor
+   layers can produce black rectangle/strip artifacts.
+5. The countdown used a permanent `setInterval`, including while the NUI was
+   hidden.
+6. Lua managed focus/freeze in separate paths and did not guarantee
+   `SetNuiFocusKeepInput(false)` across stop, exit, and failure paths.
+7. The loading screen closed after JS-ready but before a browser frame actually
+   contained the opaque shell, leaving a world-flash race.
 
-The fix removes the forced document colour scheme and gives the DOM root an
-explicit `hidden` lifecycle. It becomes visible only when an authoritative
-snapshot or terminal diagnostic actually has a view. Early core/database races
-and JavaScript/Lua failures also have bounded terminal recovery instead of an
-indefinite empty overlay.
-
-Assets were not the cause: `vite.config.ts` already used `base: './'`, the built
-HTML referenced relative hashed assets, every referenced file existed in
-`web/dist`, and the real FiveM log contained no bundle exception.
-
-## Actual connection path
-
-```text
-FiveM connection / deferrals
-  → gc_core client scripts loaded
-  → bounded clientReady hello
-  → server connectionAccepted
-  → server-authoritative spawn decision
-  → client fade-out, model/collision/position work, fade-in
-  → server entity verification and spawnConfirmed
-  → gc_core closes FiveM loading screens once
-  → gc_identity resolves the trusted identifier
-  → ready identity stays visually hidden
-     OR registration/character state opens NUI
-```
-
-`gc_core` owns all fades, loading-screen shutdown, spawn decisions and spawn
-verification. `gc_identity` owns only its NUI focus/presentation restriction and
-identity state. The audit found no identity call to screen-fade or loading-screen
-natives and no unbounded core wait.
-
-## NUI lifecycle after the fix
+## Architecture after the fix
 
 ```text
-HTML loaded → root hidden / transparent document canvas / no focus
-JavaScript initialized → NUI ready callback
-Lua stores or already has authoritative snapshot
-  ├─ state=ready → replay snapshot, keep NUI empty, release focus/freeze
-  └─ state!=ready → replay snapshot, render UI, acquire focus/freeze
-
-transient core/DB/bootstrap race → bounded silent hello retry
-terminal DB/hello failure → diagnostic retry/exit view
-no JavaScript ready ACK → release focus/freeze → validated server disconnect
-resource stop → cancel watchdog → clear view → release focus/freeze
+transparent HTML/body/#app + hidden root
+        ↓ authoritative snapshot
+resolve exactly one IdentityView
+        ↓
+one fixed opaque IdentityShell
+        ├── CSS GCore background
+        ├── one content card
+        ├── optional exit confirmation
+        └── footer/brand
+        ↓ ready/reset/stop/exit
+cleanupVisualState + GCIdentityNuiController.Cleanup
+        ↓
+empty DOM + hidden transparent root
+focus false + keepInput false + identity freeze released
 ```
 
-No fixed sleep is used as a synchronization mechanism. The only waits are
-bounded retry/deadline watchdogs; readiness is established by callbacks and
-authoritative snapshots.
+`IdentityShell` is `position: fixed`, `inset: 0`, `100vw × 100vh`, with an opaque
+`#030a07` base. The grid and green glows are lightweight CSS layers above that
+base; the world cannot be visible below them. `html`, `body`, and `#app` always
+remain transparent. A hidden root uses `display: none`, not opacity alone.
 
-## Failure recovery and diagnostics
+`backdrop-filter`, `will-change`, fullscreen blur, oversized shadows, and
+permanent GPU layers were removed. Short fade/translate animations respect
+`prefers-reduced-motion`.
 
-| Code | Meaning | Result |
-| --- | --- | --- |
-| `GC-IDENTITY-HELLO-TIMEOUT` | no authoritative reply within the bounded hello window | visible retry/exit view |
-| `GC-IDENTITY-DATABASE-UNAVAILABLE` | startup completed in degraded database state | server rejection and visible error |
-| `GC-IDENTITY-NUI-NOT-READY` | JS bundle did not call ready in time | focus/freeze released and controlled disconnect |
-| `GC-IDENTITY-CLIENT-FAILURE-INVALID` | forged/unapproved client failure code | rejected; no privileged effect |
+## Frontend state machine
 
-Transient `CORE-UNAVAILABLE`, `PLAYER-NOT-CONNECTED`, `PLAYER-NOT-READY`,
-`OPERATION-IN-PROGRESS`, and non-degraded database bootstrap states do not flash
-a terminal error. They are retried by the existing bounded hello loop.
+```text
+hidden
+loading
+registration
+registration-verification
+login-verification
+registration-verified
+profile-completion
+spawn-transition
+characters
+fatal-error
+```
 
-For debugging, enable `GCIdentityConfig.client.debug` temporarily and inspect the
-FiveM client log for `[GC][IDENTITY][CLIENT]`. Never log connection strings,
-email, identifiers, passwords, or tokens. Password authentication is disabled in
-this version; no password field or password storage exists.
+At most one `IdentityView` exists at a time. Before mounting a new view, the app
+idempotently removes old DOM, timers, and pending animation frames. An unknown
+server state fails closed into a controlled fatal screen instead of preserving a
+stale overlay.
 
-## Build and manifest contract
+The verification countdown exists only on the two verification views and is
+removed on every transition, reset, or destroy. There is no permanent frontend
+polling.
 
-- `ui_page`: `web/dist/index.html`;
-- manifest files: built HTML and `web/dist/assets/*`;
-- Vite base: `./`;
-- standalone browser development: the bridge is inert when
-  `GetParentResourceName` is absent;
-- CI rebuilds NUI and fails if committed `dist` differs.
+## Loading and spawn handoff
 
-## Regression coverage
+```text
+NUI JS initialized
+  → ready callback
+  → Lua RESET
+  → authoritative full snapshot
+  → frontend mounts opaque IdentityShell
+  → requestAnimationFrame
+  → presented callback
+  → Lua idempotently calls ShutdownLoadingScreen/Nui
+```
 
-Automated tests cover hidden initial mount, ready-player no-flash, authoritative
-snapshot replay after the JS ACK, balanced focus/freeze, bounded hello timeout,
-transient core startup, degraded database response, server rejection, broken NUI
-bundle cleanup, controlled disconnect allowlist, restart recovery, reconnect,
-two isolated server-side player sessions, spawn failure/retry and core loading
-completion.
+The FiveM loading screen therefore remains until the browser frame is covered by
+the shell. No fixed `Wait(1000)` synchronization exists.
 
-| Scenario | Boundary | Result |
-| --- | --- | --- |
-| returning player and clean reconnect | real FXServer + one FiveM client | PASS |
-| `restart gc_identity` while spawned | real FXServer + one FiveM client | PASS |
-| `restart gc_core` + re-ensure declared dependant | real FXServer + one FiveM client | PASS |
-| new identity registration through ready | production Lua path in module harness + NUI unit path | PASS |
-| database unavailable / degraded | production service/events with database boundary mock | PASS |
-| slow database/bootstrap race | production recovery path with deferred boundary | PASS |
-| delayed or missing NUI ready | production Lua client path in runtime harness | PASS |
-| server rejection and spawn failure | module/core integration harnesses | PASS |
-| two simultaneous identity sessions | production service path in integration harness | PASS |
-| two separate real FiveM clients | not run | NOT RUN |
+After finalization the server moves identity to `spawn_releasing`; the same shell
+shows “Entering the server…”. Core remains the sole owner of spawn, entity
+verification, and retry. After the server-authoritative spawn hook:
 
-## Remaining architectural observation
+- a persisted selected character reaches `ready`, performs full cleanup, and
+  reveals the world;
+- when no character exists, the intentional character view stays inside the
+  same opaque shell until selection. This is post-spawn identity domain, not a
+  stale pre-spawn overlay; Core has allowed the world, but the UI intentionally
+  keeps it covered.
 
-In the audited API v1 architecture, core spawn currently completes independently
-of identity readiness; `CanUseGameplayFeatures` means core state `spawned` only.
-This did not cause the black screen and was deliberately not changed by this
-minimal bug fix. A future identity-before-gameplay gate must be a generic,
-versioned core/module contract, not a private core dependency on `gc_identity`.
+## Cleanup and focus
 
-## Runtime gate
+Lua `GCIdentityNuiController.Cleanup(reason, sendReset)` centrally:
 
-The fixed production build was verified in FXServer build b3751 with MariaDB and
-oxmysql:
+- cancels the control-restriction generation;
+- calls `SetNuiFocus(false, false)`;
+- calls `SetNuiFocusKeepInput(false)`;
+- releases the identity-owned freeze from both the captured handle and the
+  current player ped when `SetPlayerModel` replaced the entity during handoff;
+- sends frontend `reset` while JS is available.
 
-- an existing player completed a clean disconnect/reconnect and reached gameplay;
-- `restart gc_identity` while spawned preserved the visible world;
-- `restart gc_core`, followed by the required `ensure gc_identity`, recovered the
-  spawned player and kept the NUI transparent;
-- the live FiveM log reported `state=ready`, with no NUI bundle exception;
-- stopping and starting only `gc_identity` reproduced the old failure before the
-  document-canvas fix and no longer reproduced it after the fix.
+Cleanup runs on `ready`, explicit exit, client failure, resource start, resource
+stop, and `gc_core` stop. Repeated calls are safe. Frontend reset clears the
+snapshot, form draft, errors, exit modal, countdown, pending frame, and all DOM.
 
-New-account form submission, concurrent real clients, and injected real database
-latency were not executed as destructive/multi-client live tests in this run;
-their production boundaries are covered by the automated module/runtime suites.
+## Registration and authentication UX
+
+- One card progresses through name/email, code, verified summary, and spawn
+  transition; no previous card remains hidden below it.
+- Name/email drafts survive pending requests and email correction.
+- Email uses `type=email`, `autocomplete=email`, and `spellcheck=false`.
+- Code paste is supported, non-digits are removed, and length is capped at six;
+  Enter submits the normal form.
+- Errors remain local, actions disable while pending, and resend timing remains
+  server-authoritative.
+- The new-IP screen exposes only masked email and a user-facing explanation, not
+  raw IP/fingerprint data.
+- All new strings have RU/EN variants; keyboard focus is visible and Escape opens
+  an exit confirmation.
+
+## Responsive contract
+
+The shell is aspect-ratio independent. Content scroll stays inside a safe
+viewport and horizontal scroll is prohibited. Card width is capped, supporting
+1280×720, 1366×768, 1920×1080, 2560×1440, 3840×2160, and ultrawide layouts. A
+low-height media query reduces spacing and typography without weakening
+fullscreen coverage.
+
+## Regression protection
+
+Frontend tests cover:
+
+- transparent hidden root with no overlay;
+- one opaque fixed shell for registration/auth;
+- exactly one active view;
+- reset/unmount and unknown-state fail-safe;
+- spawn transition and ready cleanup;
+- bounded verification timer;
+- code paste sanitization, explicit finalization, and exit cleanup;
+- `presented` ACK only after a browser frame.
+
+Lua runtime tests cover focus/freeze/keepInput symmetry, lost/delayed NUI-ready,
+presented loading handoff, duplicate ACK, resource stop, duplicate cleanup,
+model-replacement freeze recovery, and exit. The repository validator prevents
+regressions in fixed/opaque shell coverage, `backdrop-filter`, and permanent
+`setInterval` usage.
+
+## Diagnostics
+
+Temporarily enable `GCIdentityConfig.client.debug` and inspect
+`[GC][IDENTITY][CLIENT]` for JS-ready, view-presented, loading handoff, focus, and
+cleanup reason. Email, code, identifier, raw IP, token, and connection string are
+never logged.

@@ -1,7 +1,7 @@
 # Pre-spawn регистрация и безопасная авторизация
 
 Актуальный контракт: `gc_core 0.1.5-alpha` (API 1, protocol 2) и
-`gc_identity 0.4.0-alpha` (Identity API 1, protocol 3).
+`gc_identity 0.4.1-alpha` (Identity API 1, protocol 3).
 
 ## Главная гарантия
 

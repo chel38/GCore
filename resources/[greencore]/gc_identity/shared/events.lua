@@ -23,6 +23,7 @@ GCIdentityEvents = {
 
 GCIdentityNuiCallbacks = {
     ready = 'ready',
+    presented = 'presented',
     sendRegistrationCode = 'sendRegistrationCode',
     verifyEmail = 'verifyEmail',
     resendVerification = 'resendVerification',

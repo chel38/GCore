@@ -11,6 +11,37 @@ local nuiWatchGeneration = 0
 local pendingRequests = {}
 local loadingScreenHandedOff = false
 local debugLog
+local frozenPed
+local GCIdentityNuiController = {}
+
+-- EN: SetPlayerModel can replace the local ped while the identity shell owns
+-- presentation freeze. Release both the original handle and the current ped so
+-- a model swap cannot carry a stale frozen state into gameplay.
+-- RU: SetPlayerModel может заменить локальный ped, пока identity shell владеет
+-- presentation freeze. Снимаем freeze и с исходного handle, и с текущего ped,
+-- чтобы смена модели не перенесла устаревшую блокировку в gameplay.
+local function releasePresentationFreeze()
+    local ownedPed = frozenPed
+
+    if not ownedPed then
+        return
+    end
+
+    frozenPed = nil
+
+    if DoesEntityExist(ownedPed) then
+        FreezeEntityPosition(ownedPed, false)
+    end
+
+    local currentPed = PlayerPedId()
+
+    if currentPed
+        and currentPed ~= 0
+        and currentPed ~= ownedPed
+        and DoesEntityExist(currentPed) then
+        FreezeEntityPosition(currentPed, false)
+    end
+end
 
 local validStates = {
     uninitialized = true,
@@ -123,7 +154,9 @@ debugLog = function(message)
     end
 end
 
-local function setRestricted(restricted)
+function GCIdentityNuiController.SetRestricted(restricted)
+    restricted = restricted == true
+
     if uiOpen == restricted then
         return
     end
@@ -132,13 +165,23 @@ local function setRestricted(restricted)
     restrictionGeneration = restrictionGeneration + 1
     local generation = restrictionGeneration
     SetNuiFocus(restricted, restricted)
-    debugLog(restricted and 'NUI focus acquired' or 'NUI focus released')
 
-    local ped = PlayerPedId()
-
-    if ped and ped ~= 0 and DoesEntityExist(ped) then
-        FreezeEntityPosition(ped, restricted)
+    if type(SetNuiFocusKeepInput) == 'function' then
+        SetNuiFocusKeepInput(false)
     end
+
+    if restricted then
+        local ped = PlayerPedId()
+
+        if ped and ped ~= 0 and DoesEntityExist(ped) then
+            frozenPed = ped
+            FreezeEntityPosition(ped, true)
+        end
+    elseif frozenPed then
+        releasePresentationFreeze()
+    end
+
+    debugLog(restricted and 'NUI focus acquired' or 'NUI focus released')
 
     if restricted and GCIdentityConfig.client.restrictControls then
         CreateThread(function()
@@ -150,12 +193,39 @@ local function setRestricted(restricted)
     end
 end
 
+-- EN: One idempotent cleanup owns DOM reset, focus, keep-input and presentation
+-- freeze release. Calling it repeatedly is safe during restart/stop races.
+-- RU: Единый идемпотентный cleanup управляет DOM reset, focus, keep-input и
+-- снятием presentation freeze. Повторные вызовы безопасны при restart/stop race.
+function GCIdentityNuiController.Cleanup(reason, sendReset)
+    restrictionGeneration = restrictionGeneration + 1
+    uiOpen = false
+    SetNuiFocus(false, false)
+
+    if type(SetNuiFocusKeepInput) == 'function' then
+        SetNuiFocusKeepInput(false)
+    end
+
+    releasePresentationFreeze()
+
+    if sendReset and uiReady then
+        SendNUIMessage({
+            type = 'reset',
+            payload = { reason = reason or 'cleanup' }
+        })
+    end
+
+    debugLog(('NUI cleanup completed: %s'):format(reason or 'unspecified'))
+end
+
 local function sendCurrentStateToNui()
     if not uiReady then
         return
     end
 
-    if currentSnapshot then
+    if currentSnapshot and currentSnapshot.state == 'ready' then
+        GCIdentityNuiController.Cleanup('identity-ready', true)
+    elseif currentSnapshot then
         SendNUIMessage({
             type = 'snapshot',
             payload = currentSnapshot
@@ -179,10 +249,9 @@ local function applySnapshot(payload)
     -- RU: Focus выдаётся только после JS-ready callback. Загруженный HTML ещё не
     -- доказывает, что NUI bundle умеет отрисоваться и отвечать на callbacks.
     if uiReady then
-        handoffLoadingScreen()
-        setRestricted(payload.state ~= 'ready')
+        GCIdentityNuiController.SetRestricted(payload.state ~= 'ready')
     else
-        setRestricted(false)
+        GCIdentityNuiController.Cleanup('snapshot-before-nui-ready', false)
     end
 
     sendCurrentStateToNui()
@@ -198,10 +267,10 @@ local function applyLifecycleFailure(code)
     pendingRequests = {}
 
     if uiReady then
-        setRestricted(true)
+        GCIdentityNuiController.SetRestricted(true)
         sendCurrentStateToNui()
     else
-        setRestricted(false)
+        GCIdentityNuiController.Cleanup('failure-before-nui-ready', false)
     end
 
     print(('[GC][IDENTITY][CLIENT] [%s] Identity lifecycle stopped safely'):format(code))
@@ -213,7 +282,7 @@ local function reportClientFailure(code)
     end
 
     clientFailureReported = true
-    setRestricted(false)
+    GCIdentityNuiController.Cleanup('client-failure', true)
     TriggerServerEvent(GCIdentityEvents.server.clientFailure, {
         protocolVersion = GCIdentityVersion.protocol,
         code = code
@@ -316,15 +385,37 @@ RegisterNUICallback(GCIdentityNuiCallbacks.ready, function(_, callback)
     uiReady = true
     nuiWatchGeneration = nuiWatchGeneration + 1
 
+    -- EN: CEF can survive a reload with stale DOM. Reset first, then replay the
+    -- complete authoritative snapshot in the same deterministic handshake.
+    -- RU: CEF может пережить reload со старым DOM. Сначала выполняем reset, затем
+    -- в том же handshake повторяем полный authoritative snapshot.
+    SendNUIMessage({ type = 'reset', payload = { reason = 'nui-ready' } })
+
     if currentSnapshot then
-        handoffLoadingScreen()
-        setRestricted(currentSnapshot.state ~= 'ready')
+        GCIdentityNuiController.SetRestricted(currentSnapshot.state ~= 'ready')
     elseif uiFailure then
-        setRestricted(true)
+        GCIdentityNuiController.SetRestricted(true)
+    else
+        GCIdentityNuiController.Cleanup('nui-ready-without-state', false)
     end
 
     sendCurrentStateToNui()
     debugLog('NUI JS ready callback received')
+    callback({ ok = true })
+end)
+
+RegisterNUICallback(GCIdentityNuiCallbacks.presented, function(data, callback)
+    local view = type(data) == 'table' and data.view or nil
+    local visibleState = currentSnapshot and currentSnapshot.state ~= 'ready'
+
+    if type(view) ~= 'string' or #view == 0 or #view > 64
+        or not uiReady or not uiOpen or (not visibleState and not uiFailure) then
+        callback({ ok = false, code = 'GC-IDENTITY-NUI-PRESENTATION-INVALID' })
+        return
+    end
+
+    handoffLoadingScreen()
+    debugLog(('NUI view presented: %s'):format(view))
     callback({ ok = true })
 end)
 
@@ -412,6 +503,7 @@ RegisterNUICallback(GCIdentityNuiCallbacks.refresh, function(_, callback)
 end)
 
 RegisterNUICallback(GCIdentityNuiCallbacks.exit, function(_, callback)
+    GCIdentityNuiController.Cleanup('explicit-exit', true)
     TriggerServerEvent(GCIdentityEvents.server.exit, {
         protocolVersion = GCIdentityVersion.protocol
     })
@@ -452,6 +544,7 @@ AddEventHandler('onClientResourceStart', function(resourceName)
     if resourceName == GetCurrentResourceName() or resourceName == 'gc_core' then
         if resourceName == GetCurrentResourceName() then
             loadingScreenHandedOff = false
+            GCIdentityNuiController.Cleanup('resource-start', uiReady)
         end
         startHello()
 
@@ -468,13 +561,11 @@ AddEventHandler('onClientResourceStop', function(resourceName)
         currentSnapshot = nil
         uiFailure = nil
         pendingRequests = {}
-        setRestricted(false)
-
-        if uiReady then
-            SendNUIMessage({ type = 'reset' })
-        end
+        GCIdentityNuiController.Cleanup('core-stop', true)
     elseif resourceName == GetCurrentResourceName() then
         nuiWatchGeneration = nuiWatchGeneration + 1
-        setRestricted(false)
+        helloGeneration = helloGeneration + 1
+        pendingRequests = {}
+        GCIdentityNuiController.Cleanup('resource-stop', true)
     end
 end)

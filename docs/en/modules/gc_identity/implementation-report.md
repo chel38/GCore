@@ -2,7 +2,7 @@
 
 Date: 2026-08-10
 
-> Historical milestone report. The current `gc_identity 0.4.0-alpha` performs
+> Historical milestone report. The current `gc_identity 0.4.1-alpha` performs
 > registration and security authorization before spawn and supplements the
 > trusted identifier with verified email plus a server-observed IP fingerprint.
 > See [Pre-spawn registration](pre-spawn-registration.md) and

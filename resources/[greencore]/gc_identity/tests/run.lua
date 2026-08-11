@@ -12,11 +12,16 @@ local legacyData
 local currentTime = 1000
 local onlinePlayers = {}
 local focusState = false
+local keepInputState = false
 local frozenState = false
+local playerPed = 1
+local frozenEntities = {}
 local playerEndpoints = {}
 local scheduledTimeouts = {}
 local mailResponse
 local mailPayload
+local loadingScreenShutdowns = 0
+local loadingScreenNuiShutdowns = 0
 
 local function deepCopy(value, seen)
     if type(value) ~= 'table' then
@@ -205,16 +210,32 @@ function SetNuiFocus(hasFocus)
     focusState = hasFocus == true
 end
 
+function SetNuiFocusKeepInput(keepInput)
+    keepInputState = keepInput == true
+end
+
+function ShutdownLoadingScreen()
+    loadingScreenShutdowns = loadingScreenShutdowns + 1
+end
+
+function ShutdownLoadingScreenNui()
+    loadingScreenNuiShutdowns = loadingScreenNuiShutdowns + 1
+end
+
 function PlayerPedId()
-    return 1
+    return playerPed
 end
 
 function DoesEntityExist(entity)
-    return entity == 1
+    return type(entity) == 'number' and entity > 0
 end
 
-function FreezeEntityPosition(_, frozen)
-    frozenState = frozen == true
+function FreezeEntityPosition(entity, frozen)
+    frozenEntities[entity] = frozen == true
+
+    if entity == playerPed then
+        frozenState = frozen == true
+    end
 end
 
 function DisableAllControlActions() end
@@ -286,11 +307,16 @@ function IdentityTest.Reset(resetData)
     nuiMessages = {}
     droppedPlayers = {}
     focusState = false
+    keepInputState = false
     frozenState = false
+    playerPed = 1
+    frozenEntities = {}
     playerEndpoints = {}
     scheduledTimeouts = {}
     mailResponse = nil
     mailPayload = nil
+    loadingScreenShutdowns = 0
+    loadingScreenNuiShutdowns = 0
     legacyRaw = nil
     legacyData = nil
     IdentityTest.clientEvents = clientEvents
@@ -399,12 +425,30 @@ function IdentityTest.LastNuiMessage()
     return nuiMessages[#nuiMessages]
 end
 
+function IdentityTest.NuiMessageCount()
+    return #nuiMessages
+end
+
 function IdentityTest.FocusState()
     return focusState
 end
 
+function IdentityTest.KeepInputState()
+    return keepInputState
+end
+
+function IdentityTest.LoadingScreenShutdowns()
+    return loadingScreenShutdowns, loadingScreenNuiShutdowns
+end
+
 function IdentityTest.FrozenState()
-    return frozenState
+    return frozenEntities[playerPed] == true
+end
+
+function IdentityTest.SetPlayerPed(entity, frozen)
+    playerPed = entity
+    frozenEntities[entity] = frozen == true
+    frozenState = frozen == true
 end
 
 function IdentityTest.ReloadClient()

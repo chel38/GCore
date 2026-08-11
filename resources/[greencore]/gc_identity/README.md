@@ -5,9 +5,9 @@ domain for GCore. `gc_core` owns connection/session/spawn; this resource owns
 registration, trusted identifier authorization, characters, and identity
 readiness.
 
-- Resource version: `0.3.0-alpha`
+- Resource version: `0.4.1-alpha`
 - Identity API: `1` (backward-compatible)
-- Identity protocol: `2` (mandatory email verification handshake)
+- Identity protocol: `3` (pre-spawn registration/auth handshake)
 - Required Core API: `>= 1`
 - Persistence: MariaDB through `oxmysql`
 - NUI: TypeScript + Tailwind CSS
@@ -19,11 +19,11 @@ First connection:
 ```text
 trusted server-side FiveM license
             ↓
-no account → email → server-generated one-time code
+no account → registered name + email → server-generated one-time code
             ↓
-verified challenge → transactional account creation
+verified challenge → explicit transactional finalization
             ↓
-create/select an owned character
+trusted gc_core spawn release → post-spawn character selection
             ↓
 identity state = ready
 ```
@@ -73,13 +73,19 @@ unavailable.
 
 ## NUI and commands
 
-The NUI document has a transparent canvas and an explicitly hidden root when
-FiveM eagerly loads its HTML. JavaScript first acknowledges `ready`; Lua then
-replays the latest authoritative snapshot. Only a
-non-ready snapshot may open the UI, acquire focus, and freeze the local
-presentation ped. A `ready` snapshot remains hidden and releases both focus and
-the ped. NUI callbacks only request actions; the server validates lifecycle,
-exact schema, rate, replay ID, and ownership.
+The NUI document has a transparent canvas and an explicitly unmounted root when
+FiveM eagerly loads its HTML. JavaScript first acknowledges `ready`; Lua resets
+stale CEF DOM and replays the latest authoritative snapshot. Registration,
+email verification, new-IP verification, and the protected spawn transition use
+one opaque fixed `IdentityShell`; the GTA world cannot show through it. A
+`ready` snapshot runs the centralized idempotent cleanup, removes every DOM
+layer, releases focus/keep-input and the identity-owned presentation freeze.
+NUI callbacks only request actions; the server validates lifecycle, exact
+schema, rate, replay ID, and ownership.
+
+The verification countdown exists only while its view is mounted. No hidden
+polling loop, fullscreen compositor blur, external CDN, or permanent overlay is
+used. See the NUI audit for the responsive and restart contracts.
 
 Database degradation and bounded hello exhaustion render a diagnostic retry/exit
 view. If the JavaScript bundle never acknowledges readiness, the client releases
@@ -89,7 +95,7 @@ leaving an infinite black screen.
 Diagnostic commands remain available:
 
 - `/gcidentity` — request a fresh snapshot;
-- `/gcregister email@example.com` — request registration;
+- `/gcregister FirstName LastName email@example.com` — request registration;
 - `/gcverify 483921` — submit a verification code;
 - `/gccreate FirstName LastName` — request character creation;
 - `/gcselect ID` — request selection.
@@ -98,11 +104,11 @@ Diagnostic commands remain available:
 
 ```text
 uninitialized → loading → registration_required → registering
-                         → email_verification_pending → registering
-loading → auth_verification_required → loading
-                         ↘ authorized → character_required
-                                         ↓
-                                  character_selected → ready
+                         → email_verification_pending → registration_verified
+                         → registration_finalizing → authorized
+loading → auth_verification_required → authorized
+authorized → spawn_releasing → post_spawn_identity → character_required
+                                                   → character_selected → ready
 
 active state → error/disconnecting (validated transitions only)
 ```
@@ -121,8 +127,10 @@ active state → error/disconnecting (validated transitions only)
 | `GetAccount(source)` | detached Account DTO or `nil` |
 | `GetCharacters(source)` | detached Character DTO array |
 | `GetSelectedCharacter(source)` | detached Character DTO or `nil` |
+| `GetDisplayName(source)` | registered account display name or `nil` |
 
-Account DTO: `id`, `email`, `status`, `createdAt`. Character DTO: `id`,
+Account DTO: `id`, `email`, `firstName`, `lastName`, `displayName`, `status`,
+`createdAt`. Character DTO: `id`,
 `firstName`, `lastName`, `createdAt`. Trusted identifiers, database metadata,
 rate-limit state, replay cache, and internal account/character references never
 cross the public boundary. Every DTO is a copy.
@@ -138,8 +146,10 @@ end
 
 ## Network contract
 
-Client → server (internal): `hello`, `registerAccount`, `verifyEmail`,
-`resendVerification`, `createCharacter`, `selectCharacter`, allowlisted `clientFailure`, `exit`. Server → client only
+Client → server (internal): `hello`, `sendRegistrationCode`, `verifyEmail`,
+`resendVerification`, `changeRegistrationEmail`, `finalizeRegistration`,
+`completeProfile`, `createCharacter`, `selectCharacter`, allowlisted
+`clientFailure`, `exit`. Server → client only
 (internal): `snapshot`, `rejected`. Exact schemas live in `shared/events.lua` and
 `server/validation.lua`. Server-only client handlers require FiveM origin
 `source == 65535`.
@@ -167,7 +177,8 @@ See the [design](../../../docs/en/modules/gc_identity/design.md),
 [implementation report](../../../docs/en/modules/gc_identity/implementation-report.md),
 and [NUI lifecycle audit](../../../docs/en/modules/gc_identity/nui-lifecycle-audit.md).
 The verification/security flow is documented separately in
-[email verification](../../../docs/en/modules/gc_identity/email-verification.md).
+[email verification](../../../docs/en/modules/gc_identity/email-verification.md)
+and [pre-spawn registration](../../../docs/en/modules/gc_identity/pre-spawn-registration.md).
 
 ## Troubleshooting
 

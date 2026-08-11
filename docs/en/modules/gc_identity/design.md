@@ -1,4 +1,4 @@
-# gc_identity 0.4.0-alpha — implemented design
+# gc_identity 0.4.1-alpha — implemented design
 
 Status: implemented and validated with automated tests; current runtime results
 are documented separately. Identity API 1 remains compatible; protocol 3 adds

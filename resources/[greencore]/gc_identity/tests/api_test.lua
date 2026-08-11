@@ -20,7 +20,7 @@ GCModuleTest.Register('identity.api_v1_contract_exists', 'contract', function()
             exportName .. ' export exists'
         )
     end
-    GCModuleTest.ExpectEqual(GCIdentityAPI.GetIdentityVersion(), '0.4.0-alpha', 'resource version updated')
+    GCModuleTest.ExpectEqual(GCIdentityAPI.GetIdentityVersion(), '0.4.1-alpha', 'resource version updated')
     GCModuleTest.ExpectEqual(GCIdentityAPI.GetIdentityApiVersion(), 1, 'API version remains backward-compatible')
     GCModuleTest.ExpectEqual(GCIdentityAPI.GetIdentityProtocolVersion(), 3, 'pre-spawn protocol is v3')
 end)

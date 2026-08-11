@@ -255,6 +255,69 @@ foreach ($module in $moduleDirectories) {
                 Add-Failure "Module gc_identity is missing $identityPath."
             }
         }
+
+        $identityPackagePath = Join-Path $module.FullName 'web/package.json'
+
+        if (Test-Path -LiteralPath $identityPackagePath) {
+            $identityPackage = Get-Content -LiteralPath $identityPackagePath -Raw |
+                ConvertFrom-Json
+            $identityManifestVersion = [regex]::Match(
+                $moduleManifest,
+                '(?m)^\s*version\s+.(?<value>.+?).\s*$'
+            ).Groups['value'].Value
+
+            if ($identityPackage.version -ne $identityManifestVersion) {
+                Add-Failure 'gc_identity web/package.json version does not match fxmanifest.lua.'
+            }
+        }
+
+        $identityStylePath = Join-Path $module.FullName 'web/src/style.css'
+        $identityAppPath = Join-Path $module.FullName 'web/src/app.ts'
+
+        if (Test-Path -LiteralPath $identityStylePath) {
+            $identityStyle = Get-Content -LiteralPath $identityStylePath -Raw
+            $shellRule = [regex]::Match(
+                $identityStyle,
+                '(?s)\.identity-shell\s*\{(?<body>.*?)\}'
+            ).Groups['body'].Value
+
+            if (
+                ($shellRule -notmatch 'position\s*:\s*fixed\s*;') -or
+                ($shellRule -notmatch 'inset\s*:\s*0\s*;') -or
+                ($shellRule -notmatch 'width\s*:\s*100vw\s*;') -or
+                ($shellRule -notmatch 'height\s*:\s*100vh\s*;') -or
+                ($shellRule -notmatch 'background-color\s*:\s*#[0-9a-fA-F]{6}\s*;')
+            ) {
+                Add-Failure 'gc_identity IdentityShell must be fixed, viewport-sized, and opaque.'
+            }
+
+            if ($identityStyle -notmatch '(?s)html,\s*body,\s*#app\s*\{.*?background\s*:\s*transparent\s*;') {
+                Add-Failure 'gc_identity inactive document/root surface must be transparent.'
+            }
+
+            if ($identityStyle -notmatch '(?s)#app\[hidden\]\s*\{.*?display\s*:\s*none\s*;') {
+                Add-Failure 'gc_identity hidden root must be removed from rendering with display:none.'
+            }
+
+            if ($identityStyle -match 'backdrop-filter\s*:') {
+                Add-Failure 'gc_identity NUI must not use CEF backdrop-filter compositor layers.'
+            }
+        }
+
+        if (Test-Path -LiteralPath $identityAppPath) {
+            $identityApp = Get-Content -LiteralPath $identityAppPath -Raw
+
+            if (
+                ($identityApp -notmatch '\bcleanupVisualState\b') -or
+                ($identityApp -notmatch '\brenderShell\b')
+            ) {
+                Add-Failure 'gc_identity NUI must use the centralized shell and visual cleanup controller.'
+            }
+
+            if ($identityApp -match '\bsetInterval\s*\(') {
+                Add-Failure 'gc_identity NUI must not keep a permanent polling interval.'
+            }
+        }
     }
 
     $moduleLuaFiles = Get-ChildItem -LiteralPath $module.FullName -Recurse -Filter '*.lua'

@@ -1,6 +1,6 @@
 # gc_identity email verification and network-risk flow
 
-Version `0.4.0-alpha` keeps Identity API v1 backward-compatible and uses module
+Version `0.4.1-alpha` keeps Identity API v1 backward-compatible and uses module
 protocol v3. A code verifies email but intentionally creates no account and
 allows no spawn; explicit server-validated finalization is required afterward.
 

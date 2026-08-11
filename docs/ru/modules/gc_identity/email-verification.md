@@ -1,6 +1,6 @@
 # Подтверждение email и проверка сетевого адреса в gc_identity
 
-Версия `0.4.0-alpha` сохраняет backward-compatible Identity API v1 и использует
+Версия `0.4.1-alpha` сохраняет backward-compatible Identity API v1 и использует
 network protocol v3. Код подтверждает email, но намеренно не создаёт account и
 не разрешает spawn: после него требуется явная server-validated финализация.
 

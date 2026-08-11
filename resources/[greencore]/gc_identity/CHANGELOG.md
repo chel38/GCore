@@ -1,5 +1,46 @@
 # gc_identity Changelog
 
+## [0.4.1-alpha] - 2026-08-11
+
+### Fixed
+
+- Replaced translucent, independently rendered fullscreen views with one opaque
+  fixed `IdentityShell`, preventing GTA world leakage during registration,
+  email verification, new-IP verification, and spawn release.
+- Removed CEF `backdrop-filter` compositor layers and permanent hidden countdown
+  polling that could leave black rectangles or unnecessary background work.
+- Added centralized idempotent Lua/DOM cleanup for ready, exit, resource stop,
+  core stop, NUI reload, and failed bundle paths. Focus, keep-input and the
+  identity-owned ped freeze are always released together.
+- Fixed a model-swap recovery race where cleanup could unfreeze only the old
+  ped handle and leave the current player ped immobile after a resource restart.
+
+### Changed
+
+- Registration and verification cards now share one responsive RU/EN shell,
+  preserve form drafts, sanitize pasted codes, and expose clearer loading,
+  error, email-change, verified, and spawn-transition states.
+- Frontend tests cover hidden transparency, fullscreen shell ownership, one
+  active view, state reset, spawn handoff, new-IP auth, code sanitization and
+  bounded timers. Lua runtime tests cover idempotent stop/exit cleanup and ped
+  replacement during the identity-to-spawn handoff.
+- Identity API remains v1 and module protocol remains v3.
+
+## [0.4.0-alpha] - 2026-08-11
+
+### Added
+
+- Pre-spawn registered-name and email flow with explicit post-code finalization.
+- Manual Core spawn release, same-IP fast path, new-IP verification, profile
+  completion for legacy accounts, and `GetDisplayName(source)` API v1 export.
+- Migration `003_pre_spawn_registration` and security regression coverage.
+
+### Security
+
+- Email verification alone creates no account and grants no spawn. Finalization
+  revalidates the server-owned identifier, endpoint fingerprint, challenge,
+  name and email inside one repository transaction.
+
 ## [0.3.0-alpha] - 2026-08-11
 
 ### Added

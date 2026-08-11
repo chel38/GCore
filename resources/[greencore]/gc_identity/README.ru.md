@@ -4,9 +4,9 @@
 GCore. `gc_core` отвечает за connection/session/spawn, а этот resource — за
 регистрацию, авторизацию по trusted identifier, персонажей и identity readiness.
 
-- Resource version: `0.3.0-alpha`
+- Resource version: `0.4.1-alpha`
 - Identity API: `1` (backward-compatible)
-- Identity protocol: `2` (обязательный email verification handshake)
+- Identity protocol: `3` (pre-spawn registration/auth handshake)
 - Требуемый Core API: `>= 1`
 - Persistence: MariaDB через `oxmysql`
 - NUI: TypeScript + Tailwind CSS
@@ -18,11 +18,11 @@ GCore. `gc_core` отвечает за connection/session/spawn, а этот res
 ```text
 trusted server-side FiveM license
             ↓
-аккаунта нет → email → одноразовый code от сервера
+аккаунта нет → зарегистрированное имя + email → одноразовый code от сервера
             ↓
-verified challenge → transaction создаёт account
+verified challenge → явная транзакционная финализация
             ↓
-создание/выбор своего персонажа
+trusted gc_core spawn release → post-spawn выбор персонажа
             ↓
 identity state = ready
 ```
@@ -70,13 +70,18 @@ ensure gc_identity
 
 ## NUI и команды
 
-При eager-загрузке HTML в FiveM NUI использует прозрачный canvas документа и явно
-скрытый root. JavaScript сначала подтверждает `ready`, после чего Lua повторно
-отправляет последний authoritative snapshot.
-Только non-ready snapshot может открыть UI, получить focus и заморозить локальное
-представление PED. Snapshot `ready` остаётся скрытым и снимает focus/freeze. NUI
-callbacks только формируют запросы; lifecycle, exact schema, rate, replay ID и
-ownership проверяет сервер.
+При eager-загрузке HTML в FiveM NUI использует прозрачный canvas документа и
+полностью размонтированный root. JavaScript сначала подтверждает `ready`, после
+чего Lua сбрасывает старый CEF DOM и повторяет последний authoritative snapshot.
+Registration, email verification, new-IP verification и защищённый spawn
+transition используют один непрозрачный fixed `IdentityShell`, поэтому мир GTA
+не просвечивает. Snapshot `ready` запускает централизованный идемпотентный cleanup:
+удаляет DOM-слои, снимает focus/keep-input и принадлежащий identity freeze PED.
+NUI callbacks только формируют запросы; lifecycle, exact schema, rate, replay ID
+и ownership проверяет сервер.
+
+Countdown существует только пока verification-view смонтирован. Скрытого polling,
+fullscreen compositor blur, внешних CDN и постоянных overlay нет.
 
 Database degradation и исчерпание bounded hello показывают диагностический экран
 с retry/exit. Если JavaScript bundle не подтвердил readiness, client снимает focus,
@@ -86,7 +91,7 @@ Database degradation и исчерпание bounded hello показывают 
 Диагностические команды сохранены:
 
 - `/gcidentity` — запросить свежий snapshot;
-- `/gcregister email@example.com` — запросить регистрацию;
+- `/gcregister Имя Фамилия email@example.com` — запросить регистрацию;
 - `/gcverify 483921` — отправить verification code;
 - `/gccreate Имя Фамилия` — запросить создание персонажа;
 - `/gcselect ID` — запросить выбор.
@@ -95,11 +100,11 @@ Database degradation и исчерпание bounded hello показывают 
 
 ```text
 uninitialized → loading → registration_required → registering
-                         → email_verification_pending → registering
-loading → auth_verification_required → loading
-                         ↘ authorized → character_required
-                                         ↓
-                                  character_selected → ready
+                         → email_verification_pending → registration_verified
+                         → registration_finalizing → authorized
+loading → auth_verification_required → authorized
+authorized → spawn_releasing → post_spawn_identity → character_required
+                                                   → character_selected → ready
 
 active state → error/disconnecting (только валидные transitions)
 ```
@@ -118,8 +123,10 @@ active state → error/disconnecting (только валидные transitions)
 | `GetAccount(source)` | detached Account DTO или `nil` |
 | `GetCharacters(source)` | массив detached Character DTO |
 | `GetSelectedCharacter(source)` | detached Character DTO или `nil` |
+| `GetDisplayName(source)` | зарегистрированное display name аккаунта или `nil` |
 
-Account DTO: `id`, `email`, `status`, `createdAt`. Character DTO: `id`,
+Account DTO: `id`, `email`, `firstName`, `lastName`, `displayName`, `status`,
+`createdAt`. Character DTO: `id`,
 `firstName`, `lastName`, `createdAt`. Trusted identifiers, database metadata,
 rate-limit state, replay cache и внутренние ссылки не пересекают public boundary.
 Все DTO — копии.
@@ -135,8 +142,10 @@ end
 
 ## Network contract
 
-Client → server (internal): `hello`, `registerAccount`, `verifyEmail`,
-`resendVerification`, `createCharacter`, `selectCharacter`, allowlisted `clientFailure`, `exit`. Только server → client
+Client → server (internal): `hello`, `sendRegistrationCode`, `verifyEmail`,
+`resendVerification`, `changeRegistrationEmail`, `finalizeRegistration`,
+`completeProfile`, `createCharacter`, `selectCharacter`, allowlisted
+`clientFailure`, `exit`. Только server → client
 (internal): `snapshot`, `rejected`. Exact schemas находятся в `shared/events.lua` и
 `server/validation.lua`. Server-only client handlers требуют FiveM origin
 `source == 65535`.
@@ -164,7 +173,8 @@ pnpm build
 [implementation report](../../../docs/ru/modules/gc_identity/implementation-report.md),
 а также [NUI lifecycle audit](../../../docs/ru/modules/gc_identity/nui-lifecycle-audit.md).
 Security flow описан в документе
-[email verification](../../../docs/ru/modules/gc_identity/email-verification.md).
+[email verification](../../../docs/ru/modules/gc_identity/email-verification.md) и
+[pre-spawn registration](../../../docs/ru/modules/gc_identity/pre-spawn-registration.md).
 
 ## Troubleshooting
 
