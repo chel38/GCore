@@ -115,3 +115,7 @@ license/IP/Discord клиенту без документированной priv
    смене state.
 
 См. [политику совместимости API](20-api-compatibility.md).
+
+Machine-readable metadata, dependencies, standalone conformance и packaging описаны
+в [GCore Module Standard v1](ecosystem/module-standard.md). Module Contract остаётся
+runtime boundary, а Module Standard v1 задаёт её декларацию.

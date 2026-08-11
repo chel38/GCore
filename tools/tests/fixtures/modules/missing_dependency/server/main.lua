@@ -1,0 +1,1 @@
+-- Missing dependency is declared only in GCore metadata on purpose.

@@ -1,0 +1,6 @@
+exports('GetVersion', GCSDK.GetVersion)
+exports('GetApiVersion', GCSDK.GetApiVersion)
+exports('IsCoreAvailable', GCSDK.IsCoreAvailable)
+exports('GetCoreApiVersion', GCSDK.GetCoreApiVersion)
+exports('RequireCoreApi', GCSDK.RequireCoreApi)
+exports('RequireResource', GCSDK.RequireResource)

@@ -182,9 +182,18 @@ foreach ($method in $exportedMethods) {
     }
 }
 
-$moduleDirectories = Get-ChildItem -LiteralPath $modulesRoot -Directory |
-    Where-Object { $_.Name -like 'gc_*' -and $_.Name -ne 'gc_core' } |
-    Sort-Object Name
+$discoveryOutput = @(& lua (Join-Path $repoRoot 'tools/discover_modules.lua') $repoRoot)
+
+if ($LASTEXITCODE -ne 0) {
+    Add-Failure 'Portable module discovery failed.'
+    $moduleDirectories = @()
+}
+else {
+    $moduleDirectories = @($discoveryOutput |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        ForEach-Object { Get-Item -LiteralPath $_ } |
+        Sort-Object Name)
+}
 
 foreach ($module in $moduleDirectories) {
     $moduleName = $module.Name
@@ -196,6 +205,11 @@ foreach ($module in $moduleDirectories) {
     }
 
     $moduleManifest = Get-Content -LiteralPath $moduleManifestPath -Raw
+
+    & lua (Join-Path $repoRoot 'tools/module_conformance.lua') $module.FullName --quiet
+    if ($LASTEXITCODE -ne 0) {
+        Add-Failure "Module $moduleName failed Module Standard conformance."
+    }
     $declaredName = [regex]::Match(
         $moduleManifest,
         '(?m)^\s*name\s+[''"](?<value>[^''"]+)[''"]'
@@ -329,6 +343,23 @@ foreach ($module in $moduleDirectories) {
         ).Replace('\', '/')
         $moduleSource = Get-Content -LiteralPath $moduleLuaFile.FullName -Raw
 
+        if (-not $SkipLuaSyntax) {
+            $temporary = [IO.Path]::Combine([IO.Path]::GetTempPath(), ([guid]::NewGuid().ToString() + '.lua'))
+
+            try {
+                $portableSource = [regex]::Replace($moduleSource, '`[^`\r\n]+`', '0')
+                [IO.File]::WriteAllText($temporary, $portableSource, [Text.UTF8Encoding]::new($false))
+                & $LuaCompiler -p $temporary 2>&1 | ForEach-Object { $compilerOutput = $_ }
+
+                if ($LASTEXITCODE -ne 0) {
+                    Add-Failure "Module Lua syntax failed for $moduleName/$relativeModuleFile`: $compilerOutput"
+                }
+            }
+            finally {
+                Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue
+            }
+        }
+
         if ($moduleSource -match '\b(?:GCSessions|GCStates|GCSpawn|GCPlayers)\b') {
             Add-Failure "Module $moduleName references gc_core internals: $relativeModuleFile"
         }
@@ -410,7 +441,7 @@ if ($securityDocument -notmatch 'github\.com/chel38/GCore/security/advisories/ne
 }
 
 $markdownFiles = Get-ChildItem -LiteralPath $repoRoot -Recurse -Filter '*.md' |
-    Where-Object { $_.FullName -notmatch '[\\/](?:server|txData|\.git|node_modules)[\\/]' }
+    Where-Object { $_.FullName -notmatch '[\\/](?:server|txData|build|coverage|test-results|\.git|node_modules)[\\/]' }
 
 foreach ($file in $markdownFiles) {
     $content = Get-Content -LiteralPath $file.FullName -Raw
@@ -435,6 +466,12 @@ foreach ($file in $markdownFiles) {
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Error $_ }
+    exit 1
+}
+
+& lua (Join-Path $repoRoot 'tools/generate-ecosystem-docs.lua') $repoRoot --check
+if ($LASTEXITCODE -ne 0) {
+    Write-Error 'Generated ecosystem catalog/documentation is stale or invalid.'
     exit 1
 }
 

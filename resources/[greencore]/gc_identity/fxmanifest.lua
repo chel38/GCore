@@ -6,6 +6,17 @@ author 'GCore Project'
 description 'Server-authoritative account and character identity module for GCore'
 version '0.4.1-alpha'
 
+gcore_module 'yes'
+gcore_contract '1'
+gcore_type 'domain'
+gcore_api '1'
+gcore_requires_core_api '1'
+gcore_capability 'identity'
+gcore_capability 'characters'
+gcore_capability 'display-name'
+gcore_capability 'persistence'
+gcore_capability 'mail-verification'
+
 dependency 'gc_core'
 dependency 'oxmysql'
 

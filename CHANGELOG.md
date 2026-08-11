@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Добавлено / Added
 
+- GCore Module Standard v1 с machine-readable `gcore_*` metadata, explicit API
+  dependency grammar и поддержкой third-party resource names.
+- Optional `gc_ecosystem 0.1.0-alpha`: server-only discovery, immutable registry
+  DTO, compatibility, capability lookup, dependency graph и cycle detection.
+- Optional `gc_sdk 0.1.0-alpha` с минимальными generic Core/resource compatibility
+  helpers; direct Core API остаётся полностью поддержан.
+- Cross-platform Lua generator, standalone conformance checker, generic module
+  discovery/suite runner, catalog/docs generator и release packager с SHA-256.
+- RU|EN ecosystem guides, generated local catalog/graph и conformance/tooling fixtures.
 - Универсальный Core spawn mode: `automatic` сохраняет standalone-поведение,
   `manual` разрешает spawn только доверенному server export `RequestPlayerSpawn`.
 - Server-local `gc_core:hook:playerSpawned` для подтверждённого lifecycle без
@@ -22,6 +31,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Изменено / Changed
 
+- `gc_example` и `gc_identity` мигрированы на Module Standard metadata без
+  изменения Public API, network protocol или runtime semantics.
+- CI обнаруживает modules/NUI по metadata и проверяет generated catalog вместо
+  постоянного списка module-specific workflow steps.
 - Network protocol `gc_core` повышен до `2`; connection ACK теперь явно
   сообщает `spawnMode`. Core API остаётся `1` и backward-compatible.
 - `gc_identity` повышен до resource `0.4.0-alpha`, protocol `3`; Identity API

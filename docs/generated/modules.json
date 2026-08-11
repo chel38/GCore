@@ -1,0 +1,67 @@
+{
+  "contractVersion": 1,
+  "generatedFrom": "fxmanifest.lua",
+  "modules": [
+    {
+      "api": 1,
+      "capabilities": [
+        "module-registry",
+        "compatibility-diagnostics",
+        "dependency-graph"
+      ],
+      "contract": 1,
+      "name": "gc_ecosystem",
+      "optionalModules": [],
+      "requiredModules": [],
+      "requiresCoreApi": 1,
+      "resource": "gc_ecosystem",
+      "type": "infrastructure",
+      "version": "0.1.0-alpha"
+    },
+    {
+      "capabilities": [
+        "public-api-example"
+      ],
+      "contract": 1,
+      "name": "gc_example",
+      "optionalModules": [],
+      "requiredModules": [],
+      "requiresCoreApi": 1,
+      "resource": "gc_example",
+      "type": "reference",
+      "version": "0.1.0-alpha"
+    },
+    {
+      "api": 1,
+      "capabilities": [
+        "identity",
+        "characters",
+        "display-name",
+        "persistence",
+        "mail-verification"
+      ],
+      "contract": 1,
+      "name": "gc_identity",
+      "optionalModules": [],
+      "requiredModules": [],
+      "requiresCoreApi": 1,
+      "resource": "gc_identity",
+      "type": "domain",
+      "version": "0.4.1-alpha"
+    },
+    {
+      "api": 1,
+      "capabilities": [
+        "core-compatibility-helpers"
+      ],
+      "contract": 1,
+      "name": "gc_sdk",
+      "optionalModules": [],
+      "requiredModules": [],
+      "requiresCoreApi": 1,
+      "resource": "gc_sdk",
+      "type": "developer",
+      "version": "0.1.0-alpha"
+    }
+  ]
+}

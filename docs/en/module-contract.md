@@ -114,3 +114,7 @@ to clients without a documented privacy and authorization need.
 6. Bound and cancel async work on disconnect, module/core stop, or state change.
 
 See the [API compatibility policy](20-api-compatibility.md).
+
+For machine-readable metadata, dependencies, standalone conformance, and packaging,
+see [GCore Module Standard v1](ecosystem/module-standard.md). The Module Contract
+remains the runtime boundary; Module Standard v1 describes its declaration.

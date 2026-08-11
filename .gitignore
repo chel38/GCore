@@ -23,6 +23,7 @@ desktop.ini
 # EN: Local test artifacts.
 coverage/
 test-results/
+/build/
 node_modules/
 **/.env
 !.env.example

@@ -32,7 +32,9 @@ Network Protocol Version: `2`
 
 Core API Status: **Stable for module development**
 
-Модульная экосистема: `gc_example 0.1.0-alpha`, `gc_identity 0.4.1-alpha`, локальный `mail-service 0.1.0-alpha`.
+Модульная экосистема: Module Standard v1, `gc_example 0.1.0-alpha`,
+`gc_identity 0.4.1-alpha`, optional `gc_sdk 0.1.0-alpha`, optional
+`gc_ecosystem 0.1.0-alpha` и локальный `mail-service 0.1.0-alpha`.
 
 ## Возможности версии
 
@@ -85,6 +87,8 @@ set mysql_connection_string "mysql://USER:PASSWORD@127.0.0.1:3306/gcore?charset=
 set gcore_spawn_mode manual
 ensure oxmysql
 ensure gc_core
+ensure gc_sdk
+ensure gc_ecosystem
 ensure gc_example
 ensure gc_identity
 ```
@@ -105,10 +109,24 @@ ensure gc_identity
 
 ```text
 resources/[greencore]/
-├── gc_core/      # фундамент lifecycle
-├── gc_example/   # reference Public API
-└── gc_identity/  # domain аккаунта и персонажа
+├── gc_core/       # фундамент lifecycle
+├── gc_sdk/        # optional compatibility helpers
+├── gc_ecosystem/  # optional local registry/diagnostics
+├── gc_example/    # direct reference Public API
+└── gc_identity/   # domain аккаунта и персонажа
 ```
+
+`gc_core` не зависит от SDK или ecosystem. Module может использовать Core API напрямую.
+
+## GCore Ecosystem
+
+- [Введение](docs/ru/ecosystem/00-introduction.md)
+- [Module Standard v1](docs/ru/ecosystem/module-standard.md)
+- [Создание модуля](docs/ru/ecosystem/creating-module.md)
+- [Metadata](docs/ru/ecosystem/metadata.md) и [dependencies](docs/ru/ecosystem/dependencies.md)
+- [Registry](docs/ru/ecosystem/registry.md) и [optional SDK](docs/ru/ecosystem/sdk.md)
+- [Testing](docs/ru/ecosystem/testing.md), [packaging](docs/ru/ecosystem/packaging.md), [third-party modules](docs/ru/ecosystem/third-party-modules.md)
+- [Отчёт о реализации Ecosystem v0.1](docs/ru/ecosystem/ecosystem-v0.1-report.md)
 
 ## API
 
@@ -163,6 +181,10 @@ resources/[greencore]/gc_core/tests/
 ```text
 lua tools/module_test_harness.lua . gc_example
 lua tools/module_test_harness.lua . gc_identity
+lua tools/run-module-suite.lua .
+lua tools/tests/run.lua .
+lua tools/module_conformance.lua path/to/module
+lua tools/package-module.lua path/to/module
 ```
 
 ## Безопасность

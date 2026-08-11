@@ -33,7 +33,9 @@ Network Protocol Version: `2`
 
 Core API Status: **Stable for module development**
 
-Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.4.1-alpha`, local `mail-service 0.1.0-alpha`.
+Module ecosystem: Module Standard v1, `gc_example 0.1.0-alpha`, `gc_identity 0.4.1-alpha`,
+optional `gc_sdk 0.1.0-alpha`, optional `gc_ecosystem 0.1.0-alpha`, and local
+`mail-service 0.1.0-alpha`.
 
 ## Version features
 
@@ -86,6 +88,8 @@ set mysql_connection_string "mysql://USER:PASSWORD@127.0.0.1:3306/gcore?charset=
 set gcore_spawn_mode manual
 ensure oxmysql
 ensure gc_core
+ensure gc_sdk
+ensure gc_ecosystem
 ensure gc_example
 ensure gc_identity
 ```
@@ -106,10 +110,24 @@ All configuration is stored in Lua files under `resources/[greencore]/gc_core/co
 
 ```text
 resources/[greencore]/
-├── gc_core/      # lifecycle foundation
-├── gc_example/   # Public API reference
-└── gc_identity/  # account and character identity domain
+├── gc_core/       # lifecycle foundation
+├── gc_sdk/        # optional compatibility helpers
+├── gc_ecosystem/  # optional local registry/diagnostics
+├── gc_example/    # direct Public API reference
+└── gc_identity/   # account and character identity domain
 ```
+
+`gc_core` does not depend on SDK or ecosystem. Modules may use Core API directly.
+
+## GCore Ecosystem
+
+- [Introduction](docs/en/ecosystem/00-introduction.md)
+- [Module Standard v1](docs/en/ecosystem/module-standard.md)
+- [Creating a module](docs/en/ecosystem/creating-module.md)
+- [Metadata](docs/en/ecosystem/metadata.md) and [dependencies](docs/en/ecosystem/dependencies.md)
+- [Registry](docs/en/ecosystem/registry.md) and [optional SDK](docs/en/ecosystem/sdk.md)
+- [Testing](docs/en/ecosystem/testing.md), [packaging](docs/en/ecosystem/packaging.md), and [third-party modules](docs/en/ecosystem/third-party-modules.md)
+- [Ecosystem v0.1 implementation report](docs/en/ecosystem/ecosystem-v0.1-report.md)
 
 ## API
 
@@ -162,6 +180,10 @@ Independent module suites:
 ```text
 lua tools/module_test_harness.lua . gc_example
 lua tools/module_test_harness.lua . gc_identity
+lua tools/run-module-suite.lua .
+lua tools/tests/run.lua .
+lua tools/module_conformance.lua path/to/module
+lua tools/package-module.lua path/to/module
 ```
 
 ## Security

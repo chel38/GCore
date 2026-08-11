@@ -8,6 +8,32 @@ permissions:
   contents: read
 
 jobs:
+  discover-modules:
+    name: Discover Module Standard resources
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      modules: ${{ steps.discovery.outputs.modules }}
+      nui: ${{ steps.discovery.outputs.nui }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install Lua 5.4
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes lua5.4
+          sudo update-alternatives --install /usr/local/bin/lua lua /usr/bin/lua5.4 100
+
+      - name: Build dynamic module matrices
+        id: discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "modules=$(lua tools/discover_modules.lua . --json | jq -c '.')" >> "$GITHUB_OUTPUT"
+          echo "nui=$(lua tools/discover_modules.lua . --json --nui | jq -c '.')" >> "$GITHUB_OUTPUT"
+
   lua:
     name: Lua syntax and tests
     runs-on: ubuntu-latest
@@ -31,23 +57,48 @@ jobs:
       - name: Run unit, integration, security, and runtime tests
         run: lua tools/test_harness.lua .
 
-      - name: Run independent module test suites
-        shell: bash
-        run: |
-          set -euo pipefail
-          while IFS= read -r module_path; do
-            module_name="$(basename "$module_path")"
-            lua tools/module_test_harness.lua . "$module_name"
-          done < <(find 'resources/[greencore]' -mindepth 1 -maxdepth 1 -type d -name 'gc_*' ! -name 'gc_core' | sort)
+      - name: Test portable ecosystem tooling and fixtures
+        run: lua tools/tests/run.lua .
 
-  identity-nui:
-    name: gc_identity NUI
+      - name: Verify generated ecosystem catalog and graph
+        run: lua tools/generate-ecosystem-docs.lua . --check
+
+  modules:
+    name: Module / ${{ matrix.module.resource }}
+    needs: discover-modules
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.discover-modules.outputs.modules) }}
 
-    defaults:
-      run:
-        working-directory: resources/[greencore]/gc_identity/web
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install Lua 5.4
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes lua5.4
+          sudo update-alternatives --install /usr/local/bin/lua lua /usr/bin/lua5.4 100
+          sudo update-alternatives --install /usr/local/bin/luac luac /usr/bin/luac5.4 100
+
+      - name: Check Module Standard conformance
+        run: lua tools/module_conformance.lua "${{ matrix.module.path }}"
+
+      - name: Run module-owned tests
+        run: lua tools/module_test_harness.lua . "${{ matrix.module.path }}"
+
+  module-nui:
+    name: NUI / ${{ matrix.module.resource }}
+    needs: discover-modules
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.discover-modules.outputs.nui) }}
 
     steps:
       - name: Check out repository
@@ -64,17 +115,19 @@ jobs:
           node-version: 22
 
       - name: Install exact NUI dependencies
+        working-directory: ${{ matrix.module.path }}/web
         run: pnpm install --frozen-lockfile
 
       - name: Run NUI tests
-        run: pnpm test
+        working-directory: ${{ matrix.module.path }}/web
+        run: pnpm run --if-present test
 
       - name: Build production NUI
+        working-directory: ${{ matrix.module.path }}/web
         run: pnpm build
 
       - name: Verify committed build is current
-        working-directory: .
-        run: git diff --exit-code -- resources/[greencore]/gc_identity/web/dist
+        run: git diff --exit-code -- "${{ matrix.module.path }}/web/dist"
 
   mail-service:
     name: Local mail service

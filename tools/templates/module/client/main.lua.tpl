@@ -1,0 +1,2 @@
+-- EN: Client runtime is presentation only. Server state remains authoritative.
+-- RU: Client runtime отвечает только за presentation. Server state authoritative.

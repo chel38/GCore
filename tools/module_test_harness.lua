@@ -2,20 +2,43 @@
 -- RU: Автономная точка входа для тестов независимых модулей GCore.
 
 local repoRoot = arg[1] or '.'
-local moduleName = arg[2]
+local moduleArgument = arg[2]
 
-if type(moduleName) ~= 'string' or not moduleName:match('^gc_[a-z0-9_]+$') then
-    io.stderr:write('Usage: lua tools/module_test_harness.lua <repo-root> <gc_module>\n')
+if type(moduleArgument) ~= 'string' or moduleArgument == '' then
+    io.stderr:write('Usage: lua tools/module_test_harness.lua <repo-root> <module-name-or-path>\n')
     os.exit(2)
 end
 
 local separator = package.config:sub(1, 1)
-local resourceRoot = table.concat({
-    repoRoot,
-    'resources',
-    '[greencore]',
-    moduleName
-}, separator) .. separator
+local function isFile(path)
+    local file = io.open(path, 'rb')
+    if not file then return false end
+    file:close()
+    return true
+end
+
+local candidate = moduleArgument:gsub('[\\/]+', separator)
+local directManifest = candidate .. separator .. 'fxmanifest.lua'
+local resourceRoot
+
+if isFile(directManifest) then
+    resourceRoot = candidate .. separator
+else
+    resourceRoot = table.concat({
+        repoRoot,
+        'resources',
+        '[greencore]',
+        moduleArgument
+    }, separator) .. separator
+end
+
+local moduleName = resourceRoot:gsub('[\\/]+$', ''):match('([^\\/]+)$')
+
+if not moduleName or not moduleName:match('^[a-z0-9][a-z0-9_%-]*$')
+    or not isFile(resourceRoot .. 'fxmanifest.lua') then
+    io.stderr:write('Module resource or manifest does not exist.\n')
+    os.exit(2)
+end
 
 GCModuleTest = {
     moduleName = moduleName,

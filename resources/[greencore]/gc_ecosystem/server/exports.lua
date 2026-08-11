@@ -1,0 +1,8 @@
+exports('GetVersion', GCEcosystemAPI.GetVersion)
+exports('GetApiVersion', GCEcosystemAPI.GetApiVersion)
+exports('ListModules', GCEcosystemAPI.ListModules)
+exports('GetModule', GCEcosystemAPI.GetModule)
+exports('IsModuleCompatible', GCEcosystemAPI.IsModuleCompatible)
+exports('GetDependencyGraph', GCEcosystemAPI.GetDependencyGraph)
+exports('GetCapabilityProviders', GCEcosystemAPI.GetCapabilityProviders)
+exports('Refresh', GCEcosystemAPI.Refresh)

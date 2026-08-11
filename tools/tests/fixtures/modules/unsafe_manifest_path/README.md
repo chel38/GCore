@@ -1,0 +1,1 @@
+# Unsafe manifest path fixture

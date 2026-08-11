@@ -1,0 +1,7 @@
+fx_version 'cerulean'
+game 'gta5'
+name 'missing_metadata'
+author 'Fixture'
+description 'Missing GCore metadata fixture'
+version '0.1.0-alpha'
+dependency 'gc_core'

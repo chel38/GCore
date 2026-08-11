@@ -1,0 +1,1 @@
+-- Intentionally empty fixture entry point.
