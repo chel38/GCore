@@ -32,7 +32,7 @@ Network Protocol Version: `1`
 
 Core API Status: **Stable for module development**
 
-Модульная экосистема: `gc_example 0.1.0-alpha`, `gc_identity 0.2.1-alpha`.
+Модульная экосистема: `gc_example 0.1.0-alpha`, `gc_identity 0.3.0-alpha`, локальный `mail-service 0.1.0-alpha`.
 
 ## Возможности версии
 
@@ -142,6 +142,8 @@ resources/[greencore]/
 - [Проектирование gc_identity](docs/ru/modules/gc_identity/design.md)
 - [Аудит NUI lifecycle gc_identity](docs/ru/modules/gc_identity/nui-lifecycle-audit.md)
 - [Отчёт persistent identity](docs/ru/modules/gc_identity/implementation-report.md)
+- [Email verification](docs/ru/modules/gc_identity/email-verification.md)
+- [Mail Service](mail-service/README.ru.md)
 - [Отчёт первого модульного этапа](docs/ru/module-ecosystem-report.md)
 - [Политика совместимости API](docs/ru/20-api-compatibility.md)
 

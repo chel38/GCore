@@ -19,22 +19,22 @@ GCModuleTest.Register('identity.api_v1_contract_exists', 'contract', function()
             exportName .. ' export exists'
         )
     end
-    GCModuleTest.ExpectEqual(GCIdentityAPI.GetIdentityVersion(), '0.2.1-alpha', 'resource version updated')
+    GCModuleTest.ExpectEqual(GCIdentityAPI.GetIdentityVersion(), '0.3.0-alpha', 'resource version updated')
     GCModuleTest.ExpectEqual(GCIdentityAPI.GetIdentityApiVersion(), 1, 'API version remains backward-compatible')
-    GCModuleTest.ExpectEqual(GCIdentityAPI.GetIdentityProtocolVersion(), 1, 'protocol remains v1')
+    GCModuleTest.ExpectEqual(GCIdentityAPI.GetIdentityProtocolVersion(), 2, 'verification protocol is v2')
 end)
 
 GCModuleTest.Register('identity.api_dto_isolation', 'contract', function()
     IdentityTest.Reset()
     IdentityTest.ResolveAndRegister(41, 'public@example.test', 'register_4100')
     local character = GCIdentityService.CreateCharacter(41, {
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'request_4101',
         firstName = 'Public',
         lastName = 'Copy'
     })
     GCIdentityService.SelectCharacter(41, {
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'request_4102',
         characterId = character.id
     })

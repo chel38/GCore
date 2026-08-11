@@ -2,13 +2,13 @@ GCModuleTest.Register('identity.resource_restart_restores_selection', 'runtime',
     IdentityTest.Reset()
     IdentityTest.ResolveAndRegister(51, 'restart@example.test', 'register_5100')
     local character = GCIdentityService.CreateCharacter(51, {
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'request_5101',
         firstName = 'Restart',
         lastName = 'Safe'
     })
     GCIdentityService.SelectCharacter(51, {
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'request_5102',
         characterId = character.id
     })
@@ -70,7 +70,7 @@ GCModuleTest.Register('identity.hello_during_database_bootstrap_waits_for_recove
     IdentityTest.Reset()
     GCIdentityService.SetAvailable(false)
     IdentityTest.EmitNetwork(GCIdentityEvents.server.hello, 56, {
-        protocolVersion = 1
+        protocolVersion = GCIdentityVersion.protocol
     })
     GCModuleTest.ExpectEqual(
         #IdentityTest.clientEvents,
@@ -84,7 +84,7 @@ GCModuleTest.Register('identity.hello_while_core_is_not_ready_retries_silently',
     IdentityTest.Reset()
     IdentityTest.core.ready[57] = false
     IdentityTest.EmitNetwork(GCIdentityEvents.server.hello, 57, {
-        protocolVersion = 1
+        protocolVersion = GCIdentityVersion.protocol
     })
     GCModuleTest.ExpectEqual(
         #IdentityTest.clientEvents,
@@ -98,7 +98,7 @@ GCModuleTest.Register('identity.degraded_database_returns_terminal_diagnostic', 
     GCIdentityService.SetAvailable(false)
     GCIdentityDatabase.MarkRuntimeFailure('GC-IDENTITY-DATABASE-UNAVAILABLE')
     IdentityTest.EmitNetwork(GCIdentityEvents.server.hello, 58, {
-        protocolVersion = 1
+        protocolVersion = GCIdentityVersion.protocol
     })
     GCModuleTest.ExpectEqual(#IdentityTest.clientEvents, 1, 'degraded database answers the client')
     GCModuleTest.ExpectEqual(

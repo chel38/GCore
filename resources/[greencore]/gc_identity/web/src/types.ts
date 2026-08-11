@@ -3,6 +3,8 @@ export type IdentityState =
   | 'loading'
   | 'registration_required'
   | 'registering'
+  | 'email_verification_pending'
+  | 'auth_verification_required'
   | 'authorized'
   | 'character_required'
   | 'character_selected'
@@ -32,6 +34,12 @@ export interface IdentitySnapshot {
   selectedCharacter: CharacterDto | null
   limits: { maxCharacters: number }
   passwordAuthentication: false
+  verification?: {
+    type: 'registration' | 'authentication'
+    maskedEmail: string
+    expiresIn: number
+    resendIn: number
+  } | null
 }
 
 export interface NuiResponse {

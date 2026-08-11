@@ -3,13 +3,13 @@ GCModuleTest.Register('identity.foreign_character_is_rejected', 'security', func
     IdentityTest.ResolveAndRegister(31, 'owner-a@example.test', 'register_3100')
     IdentityTest.ResolveAndRegister(32, 'owner-b@example.test', 'register_3200')
     local foreign = GCIdentityService.CreateCharacter(32, {
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'request_3201',
         firstName = 'Foreign',
         lastName = 'Owner'
     })
     local selected, selectError = GCIdentityService.SelectCharacter(31, {
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'request_3101',
         characterId = foreign.id
     })
@@ -27,7 +27,7 @@ GCModuleTest.Register('identity.network_rate_limit_rejects_abuse', 'security', f
 
     for _ = 1, GCIdentityConfig.rateLimits.hello.maximum + 1 do
         IdentityTest.EmitNetwork(GCIdentityEvents.server.hello, 33, {
-            protocolVersion = 1
+            protocolVersion = GCIdentityVersion.protocol
         })
     end
 
@@ -41,7 +41,7 @@ GCModuleTest.Register('identity.wrong_core_lifecycle_rejects', 'security', funct
     IdentityTest.core.gameplay[34] = false
     GCIdentityService.Resolve(34)
     local account, registrationError = GCIdentityService.RegisterAccount(34, {
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'register_3400',
         email = 'wrong-state@example.test'
     })
@@ -56,7 +56,7 @@ end)
 GCModuleTest.Register('identity.server_event_rejects_forged_authority_fields', 'security', function()
     IdentityTest.Reset()
     IdentityTest.EmitNetwork(GCIdentityEvents.server.registerAccount, 35, {
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'register_3500',
         email = 'forged@example.test',
         accountId = 999,
@@ -83,7 +83,7 @@ GCModuleTest.Register('identity.disconnect_during_storage_result_is_stale', 'run
         GCIdentityService.Disconnect(36)
     end)
     local account, registrationError = GCIdentityService.RegisterAccount(36, {
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'register_3600',
         email = 'disconnect@example.test'
     })
@@ -95,8 +95,16 @@ GCModuleTest.Register('identity.disconnect_during_storage_result_is_stale', 'run
     )
     GCModuleTest.ExpectNil(GCIdentityStates.Get(36), 'disconnect leaves no runtime identity')
     local reconnect = GCIdentityService.Resolve(36)
-    GCModuleTest.ExpectTrue(GCIdentityStates.IsAuthorized(36), 'atomic account safely resolves on reconnect')
-    GCModuleTest.ExpectEqual(reconnect.account.email, 'disconnect@example.test', 'committed transaction remains valid')
+    GCModuleTest.ExpectEqual(
+        reconnect.state,
+        'registration_required',
+        'disconnect before challenge creation leaves a clean registration flow'
+    )
+    GCModuleTest.ExpectEqual(
+        memory.GetCounts().accounts,
+        0,
+        'unverified registration never creates an account'
+    )
 end)
 
 GCModuleTest.Register('identity.duplicate_email_across_players_is_rejected', 'security', function()
@@ -104,7 +112,7 @@ GCModuleTest.Register('identity.duplicate_email_across_players_is_rejected', 'se
     IdentityTest.ResolveAndRegister(37, 'shared@example.test', 'register_3700')
     GCIdentityService.Resolve(38)
     local account, registrationError = GCIdentityService.RegisterAccount(38, {
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'register_3800',
         email = 'shared@example.test'
     })

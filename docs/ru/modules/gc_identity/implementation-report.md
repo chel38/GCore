@@ -2,6 +2,11 @@
 
 Дата: 2026-08-10
 
+> Исторический отчёт об этапе разработки. В актуальном `gc_identity
+> 0.3.0-alpha` прямой вход по trusted identifier заменён подтверждённым email и
+> fingerprint наблюдаемого сервером IP. Действующий контракт описан в
+> [Подтверждении email](email-verification.md) и README модуля.
+
 Проверенный baseline: `d1abbf0476e0ca3a5e284fe319cedef43839bc87`
 
 Core: `0.1.4-alpha`, API `1`, protocol `1`

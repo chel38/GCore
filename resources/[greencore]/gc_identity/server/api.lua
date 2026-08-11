@@ -16,6 +16,7 @@ function GCIdentityAPI.GetIdentityHealth()
     local health = GCIdentityDatabase.GetHealth()
     health.available = GCIdentityService.IsAvailable()
     health.storage = GCIdentityRepository.GetAdapterName()
+    health.mail = GCIdentityMailClient.GetHealth()
     return health
 end
 

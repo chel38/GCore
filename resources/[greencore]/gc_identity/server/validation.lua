@@ -154,6 +154,50 @@ function GCIdentityValidation.ValidateRegistration(payload)
     }
 end
 
+function GCIdentityValidation.ValidateVerificationCode(payload)
+    if not exactKeys(payload, {
+        protocolVersion = true,
+        requestId = true,
+        code = true
+    }) then
+        return nil, 'GC-IDENTITY-PAYLOAD-SCHEMA'
+    end
+
+    if not validateProtocol(payload.protocolVersion) then
+        return nil, 'GC-IDENTITY-PROTOCOL-MISMATCH'
+    end
+    if not validateRequestId(payload.requestId) then
+        return nil, 'GC-IDENTITY-PAYLOAD-REQUEST-ID'
+    end
+    if type(payload.code) ~= 'string' or not payload.code:match('^%d%d%d%d%d%d$') then
+        return nil, 'GC-IDENTITY-EMAIL-CODE-INVALID'
+    end
+    return {
+        protocolVersion = payload.protocolVersion,
+        requestId = payload.requestId,
+        code = payload.code
+    }
+end
+
+function GCIdentityValidation.ValidateResendVerification(payload)
+    if not exactKeys(payload, {
+        protocolVersion = true,
+        requestId = true
+    }) then
+        return nil, 'GC-IDENTITY-PAYLOAD-SCHEMA'
+    end
+    if not validateProtocol(payload.protocolVersion) then
+        return nil, 'GC-IDENTITY-PROTOCOL-MISMATCH'
+    end
+    if not validateRequestId(payload.requestId) then
+        return nil, 'GC-IDENTITY-PAYLOAD-REQUEST-ID'
+    end
+    return {
+        protocolVersion = payload.protocolVersion,
+        requestId = payload.requestId
+    }
+end
+
 function GCIdentityValidation.ValidateCreateCharacter(payload)
     if not exactKeys(payload, {
         protocolVersion = true,

@@ -41,7 +41,7 @@ Network Protocol Version: `1`
 
 Core API Status: **Stable for module development**
 
-Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.2.1-alpha`.
+Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.3.0-alpha`, local `mail-service 0.1.0-alpha`.
 
 ## Возможности версии / Version features
 
@@ -158,6 +158,8 @@ timestamps, lastPed и locale. Внутренние identifiers, spawn decision 
 - [gc_identity design RU](docs/ru/modules/gc_identity/design.md) / [EN](docs/en/modules/gc_identity/design.md)
 - [Аудит NUI lifecycle](docs/ru/modules/gc_identity/nui-lifecycle-audit.md) / [NUI lifecycle audit](docs/en/modules/gc_identity/nui-lifecycle-audit.md)
 - [Persistent identity report RU](docs/ru/modules/gc_identity/implementation-report.md) / [EN](docs/en/modules/gc_identity/implementation-report.md)
+- [Email verification RU](docs/ru/modules/gc_identity/email-verification.md) / [EN](docs/en/modules/gc_identity/email-verification.md)
+- [Mail Service](mail-service/README.md) / [RU](mail-service/README.ru.md)
 - [Отчёт модульного этапа](docs/ru/module-ecosystem-report.md) / [Module stage report](docs/en/module-ecosystem-report.md)
 - [Совместимость API](docs/ru/20-api-compatibility.md) / [API compatibility](docs/en/20-api-compatibility.md)
 - [Миграция 0.1.1 → 0.1.2](docs/ru/migration/0.1.1-to-0.1.2.md) / [Migration](docs/en/migration/0.1.1-to-0.1.2.md)

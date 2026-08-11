@@ -5,9 +5,9 @@ domain for GCore. `gc_core` owns connection/session/spawn; this resource owns
 registration, trusted identifier authorization, characters, and identity
 readiness.
 
-- Resource version: `0.2.1-alpha`
-- Identity API: `1` (backward-compatible, additive health export)
-- Identity protocol: `1`
+- Resource version: `0.3.0-alpha`
+- Identity API: `1` (backward-compatible)
+- Identity protocol: `2` (mandatory email verification handshake)
 - Required Core API: `>= 1`
 - Persistence: MariaDB through `oxmysql`
 - NUI: TypeScript + Tailwind CSS
@@ -19,7 +19,9 @@ First connection:
 ```text
 trusted server-side FiveM license
             ↓
-no account → explicit email registration
+no account → email → server-generated one-time code
+            ↓
+verified challenge → transactional account creation
             ↓
 create/select an owned character
             ↓
@@ -29,10 +31,11 @@ identity state = ready
 Returning connection:
 
 ```text
-trusted license → persisted account → persisted selection → ready
+trusted license + same server-observed IP → automatic authorization
+trusted license + new IP → email code → authorization
 ```
 
-Passwords are deliberately disabled in this milestone. The module does not
+Passwords are deliberately disabled. The module does not
 collect, transmit, store, or pretend to validate a password. A client-provided
 identifier, account ID, authorization claim, or character ownership claim is
 never trusted.
@@ -45,6 +48,10 @@ never trusted.
 
 ```cfg
 set mysql_connection_string "mysql://gcore:CHANGE_ME@127.0.0.1:3306/gcore?charset=utf8mb4"
+set gcore_mail_service_url "http://127.0.0.1:8091"
+set gcore_mail_token "replace-with-the-mail-service-token"
+set gcore_identity_challenge_secret "independent-random-secret-minimum-32-characters"
+set gcore_ip_fingerprint_secret "another-independent-random-secret-minimum-32-characters"
 ensure oxmysql
 ensure gc_core
 ensure gc_identity
@@ -56,8 +63,13 @@ migration is unavailable; it never silently falls back to JSON.
 
 The old `data/identities.json` adapter is read-only migration input. With
 `storage.importLegacyJson = true`, legacy records are imported idempotently and
-must complete email registration. Back up MariaDB and the legacy file before a
+must complete email verification. Back up MariaDB and the legacy file before a
 production migration.
+
+Run the separate localhost-only [GCore Mail Service](../../../mail-service/README.md)
+before starting verification flows. Same-IP returning players do not depend on
+mail availability; new registrations and new-IP logins fail closed when mail is
+unavailable.
 
 ## NUI and commands
 
@@ -78,6 +90,7 @@ Diagnostic commands remain available:
 
 - `/gcidentity` — request a fresh snapshot;
 - `/gcregister email@example.com` — request registration;
+- `/gcverify 483921` — submit a verification code;
 - `/gccreate FirstName LastName` — request character creation;
 - `/gcselect ID` — request selection.
 
@@ -85,6 +98,8 @@ Diagnostic commands remain available:
 
 ```text
 uninitialized → loading → registration_required → registering
+                         → email_verification_pending → registering
+loading → auth_verification_required → loading
                          ↘ authorized → character_required
                                          ↓
                                   character_selected → ready
@@ -123,16 +138,17 @@ end
 
 ## Network contract
 
-Client → server (internal): `hello`, `registerAccount`, `createCharacter`,
-`selectCharacter`, allowlisted `clientFailure`, `exit`. Server → client only
+Client → server (internal): `hello`, `registerAccount`, `verifyEmail`,
+`resendVerification`, `createCharacter`, `selectCharacter`, allowlisted `clientFailure`, `exit`. Server → client only
 (internal): `snapshot`, `rejected`. Exact schemas live in `shared/events.lua` and
 `server/validation.lua`. Server-only client handlers require FiveM origin
 `source == 65535`.
 
 ## Restart policy
 
-`restart gc_identity` performs a bounded online-player recovery and restores
-the persisted account/selection. FiveM stops declared dependants when
+`restart gc_identity` performs a bounded online-player recovery. DB-backed
+one-time challenges survive until TTL and are rebound to the recovered session;
+persisted account/selection remains intact. FiveM stops declared dependants when
 `gc_core` is restarted; the operator must then run `ensure gc_identity`. This
 ordering is a FiveM resource dependency behavior, not a data-loss condition.
 
@@ -150,6 +166,8 @@ See the [design](../../../docs/en/modules/gc_identity/design.md),
 [persistence design](../../../docs/en/modules/gc_identity/persistence-design.md),
 [implementation report](../../../docs/en/modules/gc_identity/implementation-report.md),
 and [NUI lifecycle audit](../../../docs/en/modules/gc_identity/nui-lifecycle-audit.md).
+The verification/security flow is documented separately in
+[email verification](../../../docs/en/modules/gc_identity/email-verification.md).
 
 ## Troubleshooting
 
@@ -158,6 +176,8 @@ and [NUI lifecycle audit](../../../docs/en/modules/gc_identity/nui-lifecycle-aud
 - `GC-IDENTITY-MIGRATION-FAILED`: inspect the first failed migration; do not
   bypass it or enable a fallback.
 - `GC-IDENTITY-EMAIL-TAKEN`: the normalized email is already owned.
+- `GC-IDENTITY-EMAIL-CODE-INVALID/EXPIRED/ATTEMPTS`: request a valid/new code.
+- `GC-IDENTITY-MAIL-SEND-FAILED/TIMEOUT`: inspect the localhost mail service and SMTP.
 - `GC-IDENTITY-PROTOCOL-MISMATCH`: client/server module builds differ.
 - `GC-IDENTITY-HELLO-TIMEOUT`: no authoritative identity response arrived within
   the bounded retry window; inspect core and database health.

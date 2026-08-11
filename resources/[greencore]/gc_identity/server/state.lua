@@ -6,6 +6,8 @@ local allowedTransitions = {
     uninitialized = { loading = true, error = true, disconnecting = true },
     loading = {
         registration_required = true,
+        email_verification_pending = true,
+        auth_verification_required = true,
         authorized = true,
         error = true,
         disconnecting = true
@@ -18,6 +20,20 @@ local allowedTransitions = {
     },
     registering = {
         registration_required = true,
+        email_verification_pending = true,
+        auth_verification_required = true,
+        authorized = true,
+        error = true,
+        disconnecting = true
+    },
+    email_verification_pending = {
+        registering = true,
+        registration_required = true,
+        error = true,
+        disconnecting = true
+    },
+    auth_verification_required = {
+        loading = true,
         authorized = true,
         error = true,
         disconnecting = true
@@ -85,11 +101,31 @@ function GCIdentityStates.Create(playerSource)
         account = nil,
         characters = {},
         selectedCharacterId = nil,
+        pendingVerification = nil,
         processedRequests = {},
         processedOrder = {}
     }
 
     return sessions[playerSource]
+end
+
+
+function GCIdentityStates.SetPendingVerification(playerSource, verification)
+    local session = GCIdentityStates.Get(playerSource)
+    if not session or type(verification) ~= 'table' then
+        return false, 'GC-IDENTITY-STATE-VERIFICATION-INVALID'
+    end
+    session.pendingVerification = verification
+    return true
+end
+
+function GCIdentityStates.ClearPendingVerification(playerSource)
+    local session = GCIdentityStates.Get(playerSource)
+    if not session then
+        return false
+    end
+    session.pendingVerification = nil
+    return true
 end
 
 function GCIdentityStates.Get(playerSource)

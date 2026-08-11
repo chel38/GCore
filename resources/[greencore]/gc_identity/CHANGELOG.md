@@ -1,5 +1,31 @@
 # gc_identity Changelog
 
+## [0.3.0-alpha] - 2026-08-11
+
+### Added
+
+- Localhost-only, token-authenticated Fastify/Nodemailer mail service with
+  generic SMTP, Mailpit templates, rate limiting, body limits, timeouts, tests,
+  and independent CI.
+- DB-backed one-time registration/authentication challenges with HMAC-SHA256
+  code digests, bounded TTL/attempts/resend and transactional consumption.
+- Server-observed IPv4/IPv6 normalization and HMAC IP fingerprints for a
+  secondary new-network-address risk check.
+- Registration/new-IP verification NUI, masked email, countdown, resend, and
+  stable diagnostics.
+
+### Changed
+
+- Registration creates an active account only after the correct email code.
+- Same-license/same-IP users auto-authorize; new-IP users require email proof.
+- Identity API remains v1; module network protocol is v2.
+
+### Security
+
+- Raw codes and IPs are never persisted or logged; public DTOs contain no
+  challenge/fingerprint metadata. Mail failure blocks registration/new-IP flows
+  without blocking a verified same-IP login.
+
 ## [0.2.1-alpha] - 2026-08-11
 
 ### Fixed

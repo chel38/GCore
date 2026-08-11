@@ -13,6 +13,10 @@ local currentTime = 1000
 local onlinePlayers = {}
 local focusState = false
 local frozenState = false
+local playerEndpoints = {}
+local scheduledTimeouts = {}
+local mailResponse
+local mailPayload
 
 local function deepCopy(value, seen)
     if type(value) ~= 'table' then
@@ -79,10 +83,17 @@ exports = setmetatable({ gc_core = core }, {
 
 json = {
     encode = function(value)
+        if type(value) == 'table' and value.email and value.code and value.type then
+            mailPayload = deepCopy(value)
+            return '__mail_payload__'
+        end
         legacyData = deepCopy(value)
         return '__identity_json__'
     end,
     decode = function(raw)
+        if raw == '__mail_success__' or raw == '__health_success__' then
+            return { ok = true, status = 'sent' }
+        end
         if raw ~= '__identity_json__' or legacyData == nil then
             error('invalid test JSON')
         end
@@ -119,6 +130,20 @@ end
 
 function GetGameTimer()
     return currentTime
+end
+
+function GetConvar(name, fallback)
+    local values = {
+        gcore_mail_service_url = 'http://127.0.0.1:8091',
+        gcore_mail_token = string.rep('m', 32),
+        gcore_identity_challenge_secret = string.rep('c', 32),
+        gcore_ip_fingerprint_secret = string.rep('i', 32)
+    }
+    return values[name] or fallback
+end
+
+function GetPlayerEndpoint(playerSource)
+    return playerEndpoints[playerSource] or '127.0.0.1:30120'
 end
 
 function GetPlayers()
@@ -184,6 +209,28 @@ function Wait(milliseconds)
     currentTime = currentTime + (milliseconds or 0)
 end
 
+function SetTimeout(milliseconds, handler)
+    table.insert(scheduledTimeouts, {
+        dueAt = currentTime + milliseconds,
+        handler = handler
+    })
+end
+
+function PerformHttpRequest(url, callback, method, body)
+    if body == '__mail_payload__' then
+        -- mailPayload was captured by json.encode.
+    end
+    local response = mailResponse
+    if not response then
+        response = method == 'GET'
+            and { status = 200, body = '__health_success__' }
+            or { status = 202, body = '__mail_success__' }
+    end
+    if not response.timeout then
+        callback(response.status, response.body or '')
+    end
+end
+
 IdentityTest = {
     core = core,
     publicExports = publicExports,
@@ -218,6 +265,10 @@ function IdentityTest.Reset(resetData)
     droppedPlayers = {}
     focusState = false
     frozenState = false
+    playerEndpoints = {}
+    scheduledTimeouts = {}
+    mailResponse = nil
+    mailPayload = nil
     legacyRaw = nil
     legacyData = nil
     IdentityTest.clientEvents = clientEvents
@@ -238,6 +289,27 @@ end
 
 function IdentityTest.Advance(milliseconds)
     currentTime = currentTime + milliseconds
+    local remaining = {}
+    for _, timeout in ipairs(scheduledTimeouts) do
+        if timeout.dueAt <= currentTime then
+            timeout.handler()
+        else
+            table.insert(remaining, timeout)
+        end
+    end
+    scheduledTimeouts = remaining
+end
+
+function IdentityTest.SetEndpoint(playerSource, endpoint)
+    playerEndpoints[playerSource] = endpoint
+end
+
+function IdentityTest.SetMailResponse(response)
+    mailResponse = response and deepCopy(response) or nil
+end
+
+function IdentityTest.LastMailPayload()
+    return deepCopy(mailPayload)
 end
 
 function IdentityTest.SetOnlinePlayers(players)
@@ -336,6 +408,18 @@ function IdentityTest.ResolveAndRegister(playerSource, email, requestId)
         end
 
         snapshot = GCIdentityService.GetSnapshot(playerSource)
+        if snapshot.state == 'email_verification_pending' then
+            local delivered = IdentityTest.LastMailPayload()
+            local _, verificationError = GCIdentityService.VerifyEmailCode(playerSource, {
+                protocolVersion = GCIdentityVersion.protocol,
+                requestId = (requestId or ('register_%04d'):format(playerSource)) .. '_verify',
+                code = delivered and delivered.code or '000000'
+            })
+            if verificationError then
+                return nil, verificationError
+            end
+            snapshot = GCIdentityService.GetSnapshot(playerSource)
+        end
     end
 
     return snapshot
@@ -356,11 +440,16 @@ for _, fileName in ipairs({
     'shared/events.lua',
     'shared/client_security.lua',
     'server/logger.lua',
+    'server/crypto.lua',
+    'server/endpoint.lua',
+    'server/security_config.lua',
+    'server/mail_client.lua',
     'server/state.lua',
     'server/validation.lua',
     'server/rate_limit.lua',
     'server/migrations/registry.lua',
     'server/migrations/001_initial_identity.lua',
+    'server/migrations/002_email_verification_security.lua',
     'server/database.lua',
     'server/repositories/memory.lua',
     'server/repositories/json_legacy.lua',
@@ -381,6 +470,7 @@ for _, fileName in ipairs({
     'tests/validation_test.lua',
     'tests/repository_test.lua',
     'tests/service_test.lua',
+    'tests/verification_test.lua',
     'tests/security_test.lua',
     'tests/api_test.lua',
     'tests/migration_test.lua',

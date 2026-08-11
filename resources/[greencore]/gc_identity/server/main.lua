@@ -75,6 +75,26 @@ local function startIdentity()
     end
 
     GCIdentityService.SetAvailable(true)
+
+    if GCIdentityConfig.mail.healthCheckOnStart then
+        GCIdentityMailClient.CheckHealth(function(healthy, healthError)
+            if healthy then
+                GCIdentityLogger.Info(
+                    'GC-IDENTITY-MAIL-HEALTHY',
+                    'Local mail service health check passed'
+                )
+            else
+                -- EN: Mail failure does not disable same-IP authorization, but
+                -- every flow requiring a code remains fail-closed.
+                -- RU: Ошибка почты не отключает same-IP авторизацию, однако все
+                -- flows с обязательным кодом остаются fail-closed.
+                GCIdentityLogger.Warn(
+                    healthError or 'GC-IDENTITY-MAIL-UNAVAILABLE',
+                    'Local mail service is unavailable; verification flows are blocked'
+                )
+            end
+        end)
+    end
     local databaseHealth = GCIdentityDatabase.GetHealth()
     GCIdentityLogger.Info(
         'GC-IDENTITY-STARTED',

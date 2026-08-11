@@ -4,7 +4,7 @@ game 'gta5'
 name 'gc_identity'
 author 'GCore Project'
 description 'Server-authoritative account and character identity module for GCore'
-version '0.2.1-alpha'
+version '0.3.0-alpha'
 
 dependency 'gc_core'
 dependency 'oxmysql'
@@ -19,11 +19,16 @@ shared_scripts {
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'server/logger.lua',
+    'server/crypto.lua',
+    'server/endpoint.lua',
+    'server/security_config.lua',
+    'server/mail_client.lua',
     'server/state.lua',
     'server/validation.lua',
     'server/rate_limit.lua',
     'server/migrations/registry.lua',
     'server/migrations/001_initial_identity.lua',
+    'server/migrations/002_email_verification_security.lua',
     'server/database.lua',
     'server/repositories/memory.lua',
     'server/repositories/json_legacy.lua',

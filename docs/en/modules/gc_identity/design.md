@@ -1,7 +1,8 @@
-# gc_identity 0.2.1-alpha — implemented design
+# gc_identity 0.3.0-alpha — implemented design
 
 Status: implemented and validated with automated tests and a one-client real
-FXServer/MariaDB smoke test. Identity API 1 and protocol 1 remain compatible.
+FXServer/MariaDB smoke test. Identity API 1 remains compatible; protocol 2 adds
+the mandatory email-code and new-IP handshake.
 
 ## Responsibility
 
@@ -31,9 +32,11 @@ The primary credential is a server-captured `license`/`license2` selected throug
 `gc_core:GetPlayerIdentifier(source)`. It never comes from a client payload.
 
 An unknown identifier does not create an account. It enters
-`registration_required`; a normalized unique email plus the trusted identifier
-are committed atomically. A returning identifier automatically resolves its
-account. Password authentication is disabled and no password-shaped data is
+`registration_required`; submitting a normalized unique email creates a
+DB-backed one-time challenge, not an account. Only a correct server-generated
+code atomically creates/links the account, verifies email, and saves the first
+HMAC IP fingerprint. A returning same-IP identifier authorizes automatically;
+a new observed IP requires another email code. Password authentication is disabled and no password-shaped data is
 accepted or persisted.
 
 ## State machine
@@ -43,8 +46,9 @@ uninitialized
     ↓
  loading ──────────────→ error
     ├─ unknown identifier → registration_required → registering
-    │                                          └──→ authorized
-    └─ persisted account ─────────────────────────→ authorized
+    │                       → email_verification_pending → authorized
+    ├─ persisted account + new IP → auth_verification_required → authorized
+    └─ persisted account + same IP ────────────────────────────→ authorized
                                                      ↓
                                       character_required
                                              ↓
@@ -72,7 +76,7 @@ NUI/client request
   → guarded client handler
 ```
 
-The client may submit only email, character names, or a character ID. It cannot
+The client may submit only email, a verification code, character names, or a character ID. It cannot
 submit trusted identifiers, account ID, authorization state, ownership, or
 database fields.
 
@@ -82,8 +86,8 @@ database fields.
 | --- | --- |
 | `GetIdentityVersion` | `string` |
 | `GetIdentityApiVersion` | integer `1` |
-| `GetIdentityProtocolVersion` | integer `1` |
-| `GetIdentityHealth` | detached `{ available, repository, database }` DTO |
+| `GetIdentityProtocolVersion` | integer `2` |
+| `GetIdentityHealth` | detached `{ available, storage, database, mail }` DTO |
 | `IsAuthorized` | boolean for a valid current source |
 | `IsIdentityReady` | true only in identity state `ready` |
 | `GetIdentityState` | state string or `nil` |
@@ -102,6 +106,8 @@ private.
 | --- | --- | --- |
 | `gc_identity:server:hello` | client → server | `{ protocolVersion }` |
 | `gc_identity:server:registerAccount` | client → server | `{ protocolVersion, requestId, email }` |
+| `gc_identity:server:verifyEmail` | client → server | `{ protocolVersion, requestId, code }` |
+| `gc_identity:server:resendVerification` | client → server | `{ protocolVersion, requestId }` |
 | `gc_identity:server:createCharacter` | client → server | `{ protocolVersion, requestId, firstName, lastName }` |
 | `gc_identity:server:selectCharacter` | client → server | `{ protocolVersion, requestId, characterId }` |
 | `gc_identity:server:clientFailure` | client → server | allowlisted `{ protocolVersion, code }` |

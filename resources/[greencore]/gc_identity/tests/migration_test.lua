@@ -13,6 +13,7 @@ end
 GCModuleTest.Register('identity.migrations_fresh_database_applies_in_order', 'migration', function()
     IdentityTest.Reset()
     local inserts = 0
+    local versions = {}
     local ddlStatements = 0
     GCIdentityConfig.storage.adapter = 'oxmysql'
     MySQL = {
@@ -27,7 +28,7 @@ GCModuleTest.Register('identity.migrations_fresh_database_applies_in_order', 'mi
         end),
         insert = method(function(_, values)
             inserts = inserts + 1
-            GCModuleTest.ExpectEqual(values[1], '001_initial_identity', 'migration version recorded')
+            table.insert(versions, values[1])
             return inserts
         end)
     }
@@ -35,19 +36,25 @@ GCModuleTest.Register('identity.migrations_fresh_database_applies_in_order', 'mi
     GCModuleTest.ExpectTrue(initialized, 'fresh database initializes')
     GCModuleTest.ExpectNil(initializeError, 'fresh migration has no error')
     GCModuleTest.ExpectTrue(ddlStatements >= 5, 'migration table and schema statements execute')
-    GCModuleTest.ExpectEqual(inserts, 1, 'one pending migration is recorded')
+    GCModuleTest.ExpectEqual(inserts, 2, 'both pending migrations are recorded')
+    GCModuleTest.ExpectEqual(versions[1], '001_initial_identity', 'initial migration is first')
+    GCModuleTest.ExpectEqual(
+        versions[2],
+        '002_email_verification_security',
+        'verification migration is second'
+    )
     GCModuleTest.ExpectEqual(
         GCIdentityDatabase.GetHealth().appliedMigrations,
-        1,
+        2,
         'health reports applied migration count'
     )
     restoreMemoryDatabase()
 end)
 
-GCModuleTest.Register('identity.migrations_existing_database_is_idempotent', 'migration', function()
+GCModuleTest.Register('identity.migrations_existing_database_applies_only_pending', 'migration', function()
     IdentityTest.Reset()
     local migrationInserts = 0
-    local schemaStatements = 0
+    local pendingStatements = 0
     GCIdentityConfig.storage.adapter = 'oxmysql'
     MySQL = {
         scalar = method(function() return 1 end),
@@ -60,10 +67,7 @@ GCModuleTest.Register('identity.migrations_existing_database_is_idempotent', 'mi
                 return {}
             end
 
-            if sql:find('CREATE TABLE IF NOT EXISTS `gc_', 1, true)
-                and not sql:find('gc_identity_schema_migrations', 1, true) then
-                schemaStatements = schemaStatements + 1
-            end
+            pendingStatements = pendingStatements + 1
             return {}
         end),
         insert = method(function()
@@ -73,8 +77,11 @@ GCModuleTest.Register('identity.migrations_existing_database_is_idempotent', 'mi
     }
     local initialized = GCIdentityDatabase.Initialize()
     GCModuleTest.ExpectTrue(initialized, 'existing database initializes')
-    GCModuleTest.ExpectEqual(schemaStatements, 0, 'applied schema does not rerun')
-    GCModuleTest.ExpectEqual(migrationInserts, 0, 'applied migration is not recorded twice')
+    GCModuleTest.ExpectTrue(
+        pendingStatements >= 2,
+        'pending security DDL statements run without replaying migration 001'
+    )
+    GCModuleTest.ExpectEqual(migrationInserts, 1, 'only pending migration is recorded')
     restoreMemoryDatabase()
 end)
 

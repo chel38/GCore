@@ -1,7 +1,8 @@
-# gc_identity 0.2.1-alpha — реализованный design
+# gc_identity 0.3.0-alpha — реализованный design
 
 Статус: реализовано и проверено automated tests и реальным smoke-тестом с одним
-FiveM client и MariaDB. Identity API 1 и protocol 1 остались совместимыми.
+FiveM client и MariaDB. Identity API 1 остался совместимым; protocol 2 добавляет
+обязательный email code и new-IP handshake.
 
 ## Ответственность
 
@@ -31,9 +32,11 @@ Primary credential — server-captured `license`/`license2`, полученны�
 `gc_core:GetPlayerIdentifier(source)`. Client payload его не содержит.
 
 Неизвестный identifier не создаёт account автоматически. State становится
-`registration_required`; normalized unique email и trusted identifier
-фиксируются одной transaction. Returning identifier автоматически находит свой
-account. Password authentication отключена: данные password-типа не принимаются
+`registration_required`; normalized unique email создаёт DB-backed one-time
+challenge, а не account. Только правильный server-generated code одной
+transaction создаёт/связывает account, подтверждает email и сохраняет первый
+HMAC IP fingerprint. Returning same-IP identifier авторизуется автоматически,
+а новый observed IP требует ещё один email code. Password authentication отключена: данные password-типа не принимаются
 и не сохраняются.
 
 ## State machine
@@ -43,8 +46,9 @@ uninitialized
     ↓
  loading ──────────────→ error
     ├─ unknown identifier → registration_required → registering
-    │                                          └──→ authorized
-    └─ persisted account ─────────────────────────→ authorized
+    │                       → email_verification_pending → authorized
+    ├─ persisted account + new IP → auth_verification_required → authorized
+    └─ persisted account + same IP ────────────────────────────→ authorized
                                                      ↓
                                       character_required
                                              ↓
@@ -72,7 +76,7 @@ NUI/client request
   → guarded client handler
 ```
 
-Клиент передаёт только email, имена character или character ID. Он не может
+Клиент передаёт только email, verification code, имена character или character ID. Он не может
 передать trusted identifier, account ID, authorization state, ownership или DB
 fields.
 
@@ -82,8 +86,8 @@ fields.
 | --- | --- |
 | `GetIdentityVersion` | `string` |
 | `GetIdentityApiVersion` | integer `1` |
-| `GetIdentityProtocolVersion` | integer `1` |
-| `GetIdentityHealth` | detached `{ available, repository, database }` DTO |
+| `GetIdentityProtocolVersion` | integer `2` |
+| `GetIdentityHealth` | detached `{ available, storage, database, mail }` DTO |
 | `IsAuthorized` | boolean для valid current source |
 | `IsIdentityReady` | true только в identity state `ready` |
 | `GetIdentityState` | state string или `nil` |
@@ -101,6 +105,8 @@ timestamps, SQL metadata, replay/rate state и mutable references остаютс
 | --- | --- | --- |
 | `gc_identity:server:hello` | client → server | `{ protocolVersion }` |
 | `gc_identity:server:registerAccount` | client → server | `{ protocolVersion, requestId, email }` |
+| `gc_identity:server:verifyEmail` | client → server | `{ protocolVersion, requestId, code }` |
+| `gc_identity:server:resendVerification` | client → server | `{ protocolVersion, requestId }` |
 | `gc_identity:server:createCharacter` | client → server | `{ protocolVersion, requestId, firstName, lastName }` |
 | `gc_identity:server:selectCharacter` | client → server | `{ protocolVersion, requestId, characterId }` |
 | `gc_identity:server:clientFailure` | client → server | allowlisted `{ protocolVersion, code }` |

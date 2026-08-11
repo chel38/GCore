@@ -3,6 +3,14 @@ import type { CharacterDto, IdentitySnapshot, NuiBridge, NuiMessage } from './ty
 const errorMessages: Record<string, string> = {
   'GC-IDENTITY-REGISTRATION-INVALID': 'Проверьте адрес электронной почты.',
   'GC-IDENTITY-EMAIL-TAKEN': 'Этот адрес уже используется.',
+  'GC-IDENTITY-EMAIL-CODE-INVALID': 'Неверный код подтверждения.',
+  'GC-IDENTITY-EMAIL-CODE-EXPIRED': 'Код истёк. Запросите новый.',
+  'GC-IDENTITY-EMAIL-CODE-ATTEMPTS': 'Лимит попыток исчерпан. Запросите новый код.',
+  'GC-IDENTITY-EMAIL-RESEND-COOLDOWN': 'Новый код пока нельзя отправить. Дождитесь таймера.',
+  'GC-IDENTITY-MAIL-UNAVAILABLE': 'Отправка email временно недоступна.',
+  'GC-IDENTITY-MAIL-TIMEOUT': 'Почтовый сервис не ответил вовремя.',
+  'GC-IDENTITY-MAIL-SEND-FAILED': 'Письмо не удалось отправить. Попробуйте позже.',
+  'GC-IDENTITY-ENDPOINT-UNAVAILABLE': 'Сервер не смог безопасно определить сетевой адрес.',
   'GC-IDENTITY-CHARACTER-INVALID': 'Имя или фамилия имеют недопустимый формат.',
   'GC-IDENTITY-CHARACTER-LIMIT': 'Достигнут лимит персонажей.',
   'GC-IDENTITY-CHARACTER-NOT-OWNED': 'Персонаж не принадлежит вашему аккаунту.',
@@ -40,6 +48,12 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
   let pendingAction: string | null = null
   let errorCode: string | null = null
   let exitConfirmation = false
+  let snapshotReceivedAt = Date.now()
+
+  const remaining = (initial: number): number => Math.max(
+    0,
+    Math.ceil(initial - (Date.now() - snapshotReceivedAt) / 1000),
+  )
 
   const renderLoading = (): string => `
     <section class="identity-shell" data-view="loading">
@@ -95,20 +109,49 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
           <div class="brand-mark" aria-hidden="true">G</div>
           <div><p class="eyebrow">Первый вход</p><h1>Создайте профиль</h1></div>
         </header>
-        <p class="muted">Ваш FiveM license уже подтверждает вход. Email нужен для уникального игрового профиля; пароль на этом этапе не используется.</p>
+        <p class="muted">Укажите email — мы отправим шестизначный код. Аккаунт будет создан только после подтверждения. Пароль не используется.</p>
         ${errorCode ? renderError() : ''}
         <form data-form="registration" novalidate>
           <label for="email">Электронная почта</label>
           <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="player@example.com" />
           <p class="field-note">Мы не запрашиваем пароль и не показываем license в интерфейсе.</p>
           <button class="button button--primary" type="submit" ${pendingAction ? 'disabled' : ''}>
-            ${pendingAction === 'registerAccount' ? 'Создаём…' : 'Продолжить'}
+            ${pendingAction === 'registerAccount' ? 'Отправляем…' : 'Получить код'}
           </button>
         </form>
         <button class="text-button" data-action="ask-exit">Выйти с сервера</button>
       </div>
       ${renderExitModal()}
     </section>`
+
+  const renderVerification = (): string => {
+    const verification = snapshot?.verification
+    if (!verification) return renderLifecycleFailure()
+    const authentication = verification.type === 'authentication'
+    const resendIn = remaining(verification.resendIn)
+    return `
+      <section class="identity-shell" data-view="verification">
+        <div class="panel panel--form">
+          <header class="panel-header">
+            <div class="brand-mark" aria-hidden="true">G</div>
+            <div><p class="eyebrow">${authentication ? 'Безопасность входа' : 'Подтверждение email'}</p><h1>${authentication ? 'Новый сетевой адрес' : 'Проверьте почту'}</h1></div>
+          </header>
+          <p class="muted">Код отправлен на <strong>${escapeHtml(verification.maskedEmail)}</strong>. ${authentication ? 'Подтвердите вход с нового сетевого адреса.' : 'Введите его, чтобы завершить регистрацию.'}</p>
+          ${errorCode ? renderError() : ''}
+          <form data-form="verification" novalidate>
+            <label for="verificationCode">Шестизначный код</label>
+            <input class="verification-code" id="verificationCode" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" minlength="6" maxlength="6" pattern="[0-9]{6}" required placeholder="000000" />
+            <p class="field-note">Код действует ещё <span data-expires-timer>${remaining(verification.expiresIn)}</span> сек. Сервер проверяет срок и число попыток.</p>
+            <button class="button button--primary" type="submit" ${pendingAction ? 'disabled' : ''}>${pendingAction === 'verifyEmail' ? 'Проверяем…' : 'Подтвердить'}</button>
+          </form>
+          <button class="text-button" data-action="resend-verification" data-resend-button ${pendingAction || resendIn > 0 ? 'disabled' : ''}>
+            ${resendIn > 0 ? `Отправить снова через <span data-resend-timer>${resendIn}</span> сек.` : 'Отправить новый код'}
+          </button>
+          <button class="text-button" data-action="ask-exit">Выйти с сервера</button>
+        </div>
+        ${renderExitModal()}
+      </section>`
+  }
 
   const renderCharacters = (): string => {
     const characters = snapshot?.characters ?? []
@@ -164,6 +207,8 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
       root.innerHTML = renderLoading()
     } else if (snapshot.state === 'registration_required') {
       root.innerHTML = renderRegistration()
+    } else if (snapshot.state === 'email_verification_pending' || snapshot.state === 'auth_verification_required') {
+      root.innerHTML = renderVerification()
     } else if (snapshot.state === 'character_required') {
       root.innerHTML = renderCharacters()
     } else if (snapshot.state === 'error') {
@@ -214,6 +259,8 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
     const values = new FormData(form)
     if (form.dataset.form === 'registration') {
       void invoke('registerAccount', { email: String(values.get('email') ?? '').trim() })
+    } else if (form.dataset.form === 'verification') {
+      void invoke('verifyEmail', { code: String(values.get('code') ?? '').trim() })
     } else if (form.dataset.form === 'character') {
       void invoke('createCharacter', {
         firstName: String(values.get('firstName') ?? '').trim(),
@@ -243,6 +290,8 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
       render()
     } else if (action === 'refresh') {
       void invoke('refresh', {})
+    } else if (action === 'resend-verification') {
+      void invoke('resendVerification', {})
     }
   }
 
@@ -256,11 +305,26 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
   root.addEventListener('click', onClick)
   document.addEventListener('keydown', onKeyDown)
   render()
+  const timer = window.setInterval(() => {
+    const verification = snapshot?.verification
+    if (!verification) return
+    const expires = root.querySelector<HTMLElement>('[data-expires-timer]')
+    if (expires) expires.textContent = String(remaining(verification.expiresIn))
+    const resend = root.querySelector<HTMLElement>('[data-resend-timer]')
+    const resendButton = root.querySelector<HTMLButtonElement>('[data-resend-button]')
+    const resendIn = remaining(verification.resendIn)
+    if (resend) resend.textContent = String(resendIn)
+    if (resendButton && resendIn === 0 && !pendingAction) {
+      resendButton.disabled = false
+      resendButton.textContent = 'Отправить новый код'
+    }
+  }, 1000)
 
   return {
     receive(message) {
       if (message.type === 'snapshot') {
         snapshot = message.payload
+        snapshotReceivedAt = Date.now()
         pendingAction = null
         errorCode = null
         exitConfirmation = false
@@ -280,6 +344,7 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
       render()
     },
     destroy() {
+      window.clearInterval(timer)
       root.removeEventListener('submit', onSubmit)
       root.removeEventListener('click', onClick)
       document.removeEventListener('keydown', onKeyDown)

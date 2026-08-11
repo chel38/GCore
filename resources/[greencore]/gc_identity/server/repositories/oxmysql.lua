@@ -6,6 +6,8 @@ local ACCOUNT_SELECT = [[
     SELECT
         a.`id`,
         a.`email`,
+        UNIX_TIMESTAMP(a.`email_verified_at`) AS `emailVerifiedAt`,
+        a.`last_ip_fingerprint` AS `lastIpFingerprint`,
         a.`status`,
         UNIX_TIMESTAMP(a.`created_at`) AS `createdAt`,
         UNIX_TIMESTAMP(a.`updated_at`) AS `updatedAt`,
@@ -24,6 +26,8 @@ local function normalizeAccount(row)
     return {
         id = tonumber(row.id),
         email = row.email,
+        emailVerifiedAt = row.emailVerifiedAt and tonumber(row.emailVerifiedAt) or nil,
+        lastIpFingerprint = row.lastIpFingerprint,
         status = row.status,
         selectedCharacterId = row.selectedCharacterId
             and tonumber(row.selectedCharacterId) or nil,
@@ -525,6 +529,292 @@ function OxMySQLRepository.ImportLegacyAccount(record)
     end
 
     return findAccountById(accountId), nil, false
+end
+
+local function normalizeChallenge(row)
+    if not row then
+        return nil
+    end
+
+    return {
+        id = tonumber(row.id),
+        accountId = row.accountId and tonumber(row.accountId) or nil,
+        bindingKey = row.bindingKey,
+        email = row.email,
+        type = row.type,
+        codeHash = row.codeHash,
+        expiresAt = tonumber(row.expiresAt),
+        attempts = tonumber(row.attempts),
+        maxAttempts = tonumber(row.maxAttempts),
+        createdAt = tonumber(row.createdAt),
+        lastSentAt = tonumber(row.lastSentAt),
+        consumedAt = row.consumedAt and tonumber(row.consumedAt) or nil
+    }
+end
+
+function OxMySQLRepository.GenerateVerificationCode()
+    local row, queryError = await(
+        MySQL.single,
+        'SELECT CONV(HEX(RANDOM_BYTES(4)), 16, 10) AS `entropy`'
+    )
+
+    if queryError then
+        return nil, queryError
+    end
+
+    local entropy = row and tonumber(row.entropy)
+    if not entropy then
+        return nil, 'GC-IDENTITY-RANDOM-UNAVAILABLE'
+    end
+
+    return ('%06d'):format((entropy % 900000) + 100000)
+end
+
+function OxMySQLRepository.CreateVerificationChallenge(challenge)
+    local challengeId
+    local committed, transactionError = startTransaction(function(query)
+        query([[
+            UPDATE `gc_identity_verification_challenges`
+            SET `consumed_at` = UTC_TIMESTAMP(3)
+            WHERE `binding_key` = ? AND `verification_type` = ?
+                AND `consumed_at` IS NULL
+        ]], { challenge.bindingKey, challenge.type })
+
+        local inserted = query([[
+            INSERT INTO `gc_identity_verification_challenges`
+                (`account_id`, `binding_key`, `email`, `verification_type`, `code_hash`,
+                 `expires_at`, `attempts`, `max_attempts`, `created_at`, `last_sent_at`)
+            VALUES (NULLIF(?, 0), ?, ?, ?, ?, FROM_UNIXTIME(?), 0, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))
+        ]], {
+            challenge.accountId or 0,
+            challenge.bindingKey,
+            challenge.email,
+            challenge.type,
+            challenge.codeHash,
+            challenge.expiresAt,
+            challenge.maxAttempts
+        })
+
+        if not inserted or not inserted.insertId then
+            return false
+        end
+        challengeId = tonumber(inserted.insertId)
+        return true
+    end)
+
+    if not committed then
+        return nil, transactionError or 'GC-IDENTITY-DATABASE-TRANSACTION-FAILED'
+    end
+
+    challenge.id = challengeId
+    challenge.attempts = 0
+    challenge.createdAt = os.time()
+    challenge.lastSentAt = challenge.createdAt
+    return challenge
+end
+
+function OxMySQLRepository.GetVerificationChallenge(bindingKey, verificationType)
+    local row, queryError = await(MySQL.single, [[
+        SELECT
+            `id`, `account_id` AS `accountId`, `binding_key` AS `bindingKey`,
+            `email`, `verification_type` AS `type`, `code_hash` AS `codeHash`,
+            UNIX_TIMESTAMP(`expires_at`) AS `expiresAt`,
+            `attempts`, `max_attempts` AS `maxAttempts`,
+            UNIX_TIMESTAMP(`created_at`) AS `createdAt`,
+            UNIX_TIMESTAMP(`last_sent_at`) AS `lastSentAt`,
+            UNIX_TIMESTAMP(`consumed_at`) AS `consumedAt`
+        FROM `gc_identity_verification_challenges`
+        WHERE `binding_key` = ? AND `verification_type` = ?
+            AND `consumed_at` IS NULL
+        ORDER BY `id` DESC LIMIT 1
+    ]], { bindingKey, verificationType })
+
+    if queryError then
+        return nil, queryError
+    end
+    if not row then
+        return nil, 'GC-IDENTITY-EMAIL-VERIFICATION-REQUIRED'
+    end
+    return normalizeChallenge(row)
+end
+
+function OxMySQLRepository.RecordVerificationFailure(challengeId)
+    local result, queryError = await(MySQL.update, [[
+        UPDATE `gc_identity_verification_challenges`
+        SET `attempts` = `attempts` + 1,
+            `consumed_at` = IF(`attempts` + 1 >= `max_attempts`, UTC_TIMESTAMP(3), NULL)
+        WHERE `id` = ? AND `consumed_at` IS NULL
+    ]], { challengeId })
+
+    if queryError then
+        return false, queryError
+    end
+    return tonumber(result) == 1, tonumber(result) == 1
+        and nil or 'GC-IDENTITY-EMAIL-VERIFICATION-REQUIRED'
+end
+
+function OxMySQLRepository.InvalidateVerificationChallenge(challengeId)
+    local result, queryError = await(MySQL.update, [[
+        UPDATE `gc_identity_verification_challenges`
+        SET `consumed_at` = COALESCE(`consumed_at`, UTC_TIMESTAMP(3))
+        WHERE `id` = ?
+    ]], { challengeId })
+
+    if queryError then
+        return false, queryError
+    end
+    return tonumber(result) == 1
+end
+
+function OxMySQLRepository.CompleteVerifiedRegistration(
+    challengeId,
+    accountId,
+    email,
+    identifierType,
+    identifier,
+    ipFingerprint
+)
+    local completedAccountId = accountId
+    local domainError
+    local committed, transactionError = startTransaction(function(query)
+        local challenges = query([[
+            SELECT `id`, `email`, `account_id`
+            FROM `gc_identity_verification_challenges`
+            WHERE `id` = ? AND `verification_type` = 'registration'
+                AND `consumed_at` IS NULL AND `expires_at` > UTC_TIMESTAMP(3)
+                AND `attempts` < `max_attempts`
+            LIMIT 1 FOR UPDATE
+        ]], { challengeId })
+
+        local storedAccountId = challenges and challenges[1]
+            and challenges[1].account_id and tonumber(challenges[1].account_id) or nil
+        if not challenges or not challenges[1]
+            or challenges[1].email ~= email
+            or storedAccountId ~= accountId then
+            domainError = 'GC-IDENTITY-EMAIL-CHALLENGE-STALE'
+            return false
+        end
+
+        local emailSql = 'SELECT `id` FROM `gc_accounts` WHERE `email` = ?'
+        local emailValues = { email }
+        if accountId then
+            emailSql = emailSql .. ' AND `id` <> ?'
+            table.insert(emailValues, accountId)
+        end
+        local emailRows = query(emailSql .. ' LIMIT 1 FOR UPDATE', emailValues)
+        if emailRows and emailRows[1] then
+            domainError = 'GC-IDENTITY-EMAIL-TAKEN'
+            return false
+        end
+
+        if accountId then
+            local identifiers = query([[
+                SELECT `account_id` FROM `gc_account_identifiers`
+                WHERE `identifier_type` = ? AND `identifier` = ?
+                LIMIT 1 FOR UPDATE
+            ]], { identifierType, identifier })
+            if not identifiers or not identifiers[1]
+                or tonumber(identifiers[1].account_id) ~= accountId then
+                domainError = 'GC-IDENTITY-REGISTRATION-CONFLICT'
+                return false
+            end
+
+            local updated = query([[
+                UPDATE `gc_accounts`
+                SET `email` = ?, `email_verified_at` = UTC_TIMESTAMP(3),
+                    `last_ip_fingerprint` = ?, `updated_at` = UTC_TIMESTAMP(3),
+                    `last_login_at` = UTC_TIMESTAMP(3)
+                WHERE `id` = ? AND `status` = 'active'
+            ]], { email, ipFingerprint, accountId })
+            if not updated or updated.affectedRows ~= 1 then
+                return false
+            end
+        else
+            local identifierRows = query([[
+                SELECT `account_id` FROM `gc_account_identifiers`
+                WHERE `identifier_type` = ? AND `identifier` = ?
+                LIMIT 1 FOR UPDATE
+            ]], { identifierType, identifier })
+            if identifierRows and identifierRows[1] then
+                domainError = 'GC-IDENTITY-REGISTRATION-CONFLICT'
+                return false
+            end
+
+            local inserted = query([[
+                INSERT INTO `gc_accounts`
+                    (`email`, `email_verified_at`, `last_ip_fingerprint`, `status`,
+                     `created_at`, `updated_at`, `last_login_at`)
+                VALUES (?, UTC_TIMESTAMP(3), ?, 'active', UTC_TIMESTAMP(3),
+                        UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))
+            ]], { email, ipFingerprint })
+            if not inserted or not inserted.insertId then
+                return false
+            end
+            completedAccountId = tonumber(inserted.insertId)
+            local linked = query([[
+                INSERT INTO `gc_account_identifiers`
+                    (`account_id`, `identifier_type`, `identifier`, `created_at`, `last_seen_at`)
+                VALUES (?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))
+            ]], { completedAccountId, identifierType, identifier })
+            if not linked or linked.affectedRows ~= 1 then
+                return false
+            end
+        end
+
+        local consumed = query([[
+            UPDATE `gc_identity_verification_challenges`
+            SET `consumed_at` = UTC_TIMESTAMP(3)
+            WHERE `id` = ? AND `consumed_at` IS NULL
+        ]], { challengeId })
+        return consumed and consumed.affectedRows == 1
+    end)
+
+    if not committed then
+        return nil, domainError or transactionError
+            or 'GC-IDENTITY-DATABASE-TRANSACTION-FAILED'
+    end
+    return findAccountById(completedAccountId)
+end
+
+function OxMySQLRepository.CompleteVerifiedAuthentication(challengeId, accountId, ipFingerprint)
+    local domainError
+    local committed, transactionError = startTransaction(function(query)
+        local challenges = query([[
+            SELECT `id` FROM `gc_identity_verification_challenges`
+            WHERE `id` = ? AND `account_id` = ?
+                AND `verification_type` = 'authentication'
+                AND `consumed_at` IS NULL AND `expires_at` > UTC_TIMESTAMP(3)
+                AND `attempts` < `max_attempts`
+            LIMIT 1 FOR UPDATE
+        ]], { challengeId, accountId })
+        if not challenges or not challenges[1] then
+            domainError = 'GC-IDENTITY-EMAIL-CHALLENGE-STALE'
+            return false
+        end
+
+        local updated = query([[
+            UPDATE `gc_accounts`
+            SET `last_ip_fingerprint` = ?, `last_login_at` = UTC_TIMESTAMP(3),
+                `updated_at` = UTC_TIMESTAMP(3)
+            WHERE `id` = ? AND `status` = 'active'
+        ]], { ipFingerprint, accountId })
+        if not updated or updated.affectedRows ~= 1 then
+            return false
+        end
+
+        local consumed = query([[
+            UPDATE `gc_identity_verification_challenges`
+            SET `consumed_at` = UTC_TIMESTAMP(3)
+            WHERE `id` = ? AND `consumed_at` IS NULL
+        ]], { challengeId })
+        return consumed and consumed.affectedRows == 1
+    end)
+
+    if not committed then
+        return nil, domainError or transactionError
+            or 'GC-IDENTITY-DATABASE-TRANSACTION-FAILED'
+    end
+    return findAccountById(accountId)
 end
 
 GCIdentityRepositories.oxmysql = OxMySQLRepository

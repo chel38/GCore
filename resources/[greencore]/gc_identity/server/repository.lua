@@ -84,6 +84,58 @@ function GCIdentityRepository.TouchLogin(accountId, identifierType, identifier)
     return call('TouchLogin', accountId, identifierType, identifier)
 end
 
+function GCIdentityRepository.GenerateVerificationCode()
+    return call('GenerateVerificationCode')
+end
+
+function GCIdentityRepository.CreateVerificationChallenge(challenge)
+    return call('CreateVerificationChallenge', challenge)
+end
+
+function GCIdentityRepository.GetVerificationChallenge(bindingKey, verificationType)
+    return call('GetVerificationChallenge', bindingKey, verificationType)
+end
+
+function GCIdentityRepository.RecordVerificationFailure(challengeId)
+    return call('RecordVerificationFailure', challengeId)
+end
+
+function GCIdentityRepository.InvalidateVerificationChallenge(challengeId)
+    return call('InvalidateVerificationChallenge', challengeId)
+end
+
+function GCIdentityRepository.CompleteVerifiedRegistration(
+    challengeId,
+    accountId,
+    email,
+    identifierType,
+    identifier,
+    ipFingerprint
+)
+    return call(
+        'CompleteVerifiedRegistration',
+        challengeId,
+        accountId,
+        email,
+        identifierType,
+        identifier,
+        ipFingerprint
+    )
+end
+
+function GCIdentityRepository.CompleteVerifiedAuthentication(
+    challengeId,
+    accountId,
+    ipFingerprint
+)
+    return call(
+        'CompleteVerifiedAuthentication',
+        challengeId,
+        accountId,
+        ipFingerprint
+    )
+end
+
 function GCIdentityRepository.GetCharacters(accountId)
     return call('GetCharacters', accountId)
 end

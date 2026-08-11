@@ -75,3 +75,40 @@ jobs:
       - name: Verify committed build is current
         working-directory: .
         run: git diff --exit-code -- resources/[greencore]/gc_identity/web/dist
+
+  mail-service:
+    name: Local mail service
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: mail-service
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.18.0
+
+      - name: Install Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: mail-service/pnpm-lock.yaml
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm lint
+
+      - name: Run mail boundary tests
+        run: pnpm test
+
+      - name: Build production service
+        run: pnpm build

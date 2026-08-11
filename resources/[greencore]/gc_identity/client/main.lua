@@ -15,6 +15,8 @@ local validStates = {
     loading = true,
     registration_required = true,
     registering = true,
+    email_verification_pending = true,
+    auth_verification_required = true,
     authorized = true,
     character_required = true,
     character_selected = true,
@@ -57,6 +59,17 @@ local function validSnapshot(payload)
         if not validPublicCharacter(character) then
             return false
         end
+    end
+
+    if payload.verification ~= nil and (
+        type(payload.verification) ~= 'table'
+        or (payload.verification.type ~= 'registration'
+            and payload.verification.type ~= 'authentication')
+        or type(payload.verification.maskedEmail) ~= 'string'
+        or type(payload.verification.expiresIn) ~= 'number'
+        or type(payload.verification.resendIn) ~= 'number'
+    ) then
+        return false
     end
 
     return payload.selectedCharacter == nil
@@ -286,6 +299,24 @@ RegisterNUICallback(GCIdentityNuiCallbacks.registerAccount, function(data, callb
     callback({ ok = requestId ~= nil, requestId = requestId, code = requestError })
 end)
 
+RegisterNUICallback(GCIdentityNuiCallbacks.verifyEmail, function(data, callback)
+    local requestId, requestError = beginRequest(
+        'verifyEmail',
+        GCIdentityEvents.server.verifyEmail,
+        { code = type(data) == 'table' and data.code or nil }
+    )
+    callback({ ok = requestId ~= nil, requestId = requestId, code = requestError })
+end)
+
+RegisterNUICallback(GCIdentityNuiCallbacks.resendVerification, function(_, callback)
+    local requestId, requestError = beginRequest(
+        'resendVerification',
+        GCIdentityEvents.server.resendVerification,
+        {}
+    )
+    callback({ ok = requestId ~= nil, requestId = requestId, code = requestError })
+end)
+
 RegisterNUICallback(GCIdentityNuiCallbacks.createCharacter, function(data, callback)
     local requestId, requestError = beginRequest(
         'createCharacter',
@@ -326,6 +357,12 @@ end, false)
 RegisterCommand('gcregister', function(_, arguments)
     beginRequest('registration', GCIdentityEvents.server.registerAccount, {
         email = arguments[1]
+    })
+end, false)
+
+RegisterCommand('gcverify', function(_, arguments)
+    beginRequest('verifyEmail', GCIdentityEvents.server.verifyEmail, {
+        code = arguments[1]
     })
 end, false)
 

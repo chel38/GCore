@@ -12,7 +12,7 @@ GCModuleTest.Register('identity.nui_registration_character_focus_flow', 'integra
     GCModuleTest.ExpectTrue(readyResult.ok, 'NUI readiness acknowledged')
 
     IdentityTest.EmitNetwork(GCIdentityEvents.server.hello, 61, {
-        protocolVersion = 1
+        protocolVersion = GCIdentityVersion.protocol
     })
     deliverLastClientEvent()
     GCModuleTest.ExpectEqual(
@@ -41,8 +41,21 @@ GCModuleTest.Register('identity.nui_registration_character_focus_flow', 'integra
     deliverLastClientEvent()
     GCModuleTest.ExpectEqual(
         IdentityTest.LastNuiMessage().payload.state,
+        'email_verification_pending',
+        'registration advances to the code UI'
+    )
+
+    local verification = IdentityTest.InvokeNui(GCIdentityNuiCallbacks.verifyEmail, {
+        code = IdentityTest.LastMailPayload().code
+    })
+    GCModuleTest.ExpectTrue(verification.ok, 'verification submit accepted')
+    local verificationEvent = IdentityTest.LastServerEvent()
+    IdentityTest.EmitNetwork(verificationEvent.name, 61, verificationEvent.payload)
+    deliverLastClientEvent()
+    GCModuleTest.ExpectEqual(
+        IdentityTest.LastNuiMessage().payload.state,
         'character_required',
-        'registration result advances to character UI'
+        'correct code advances to character UI'
     )
 
     local creation = IdentityTest.InvokeNui(GCIdentityNuiCallbacks.createCharacter, {
@@ -72,7 +85,7 @@ GCModuleTest.Register('identity.nui_server_event_local_spoof_has_no_effect', 'se
     IdentityTest.ReloadClient()
     IdentityTest.InvokeNui(GCIdentityNuiCallbacks.ready, {})
     IdentityTest.EmitNetwork(GCIdentityEvents.client.snapshot, 0, {
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         state = 'ready',
         account = {
             id = 999,
@@ -104,7 +117,7 @@ GCModuleTest.Register('identity.nui_snapshot_waits_for_js_ready_before_focus', '
     IdentityTest.Reset()
     IdentityTest.ReloadClient()
     IdentityTest.EmitNetwork(GCIdentityEvents.server.hello, 63, {
-        protocolVersion = 1
+        protocolVersion = GCIdentityVersion.protocol
     })
     deliverLastClientEvent()
 

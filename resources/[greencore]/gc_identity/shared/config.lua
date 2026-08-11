@@ -13,6 +13,16 @@ GCIdentityConfig = {
         healthAttempts = 5,
         healthRetryMs = 2000
     },
+    mail = {
+        requestTimeoutMs = 8000,
+        healthCheckOnStart = true
+    },
+    verification = {
+        codeDigits = 6,
+        ttlSeconds = 600,
+        maximumAttempts = 5,
+        resendCooldownSeconds = 60
+    },
     accounts = {
         emailMinBytes = 5,
         emailMaxBytes = 254
@@ -25,6 +35,8 @@ GCIdentityConfig = {
     rateLimits = {
         hello = { maximum = 5, windowMs = 30000 },
         registration = { maximum = 3, windowMs = 60000 },
+        verifyEmail = { maximum = 8, windowMs = 60000 },
+        resendVerification = { maximum = 3, windowMs = 60000 },
         createCharacter = { maximum = 3, windowMs = 60000 },
         selectCharacter = { maximum = 10, windowMs = 60000 },
         clientFailure = { maximum = 2, windowMs = 30000 },

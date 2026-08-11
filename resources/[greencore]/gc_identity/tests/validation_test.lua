@@ -1,19 +1,19 @@
 GCModuleTest.Register('identity.validation_valid_payloads', 'unit', function()
     IdentityTest.Reset()
-    local hello = GCIdentityValidation.ValidateHello({ protocolVersion = 1 })
+    local hello = GCIdentityValidation.ValidateHello({ protocolVersion = GCIdentityVersion.protocol })
     local registration = GCIdentityValidation.ValidateRegistration({
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'request_0000',
         email = '  Player.Name@Example.COM '
     })
     local create = GCIdentityValidation.ValidateCreateCharacter({
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'request_0001',
         firstName = '  Anna ',
         lastName = " O'Neil "
     })
     local select = GCIdentityValidation.ValidateSelectCharacter({
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'request_0002',
         characterId = 1
     })
@@ -31,23 +31,23 @@ end)
 GCModuleTest.Register('identity.validation_rejects_malformed', 'security', function()
     IdentityTest.Reset()
     local _, unknownError = GCIdentityValidation.ValidateHello({
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         forged = true
     })
     local _, protocolError = GCIdentityValidation.ValidateHello({ protocolVersion = 99 })
     local _, emailError = GCIdentityValidation.ValidateRegistration({
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'request_0003',
         email = "victim@example.com' OR 1=1"
     })
     local _, nameError = GCIdentityValidation.ValidateCreateCharacter({
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'request_0004',
         firstName = string.rep('A', 33),
         lastName = 'Smith'
     })
     local _, idError = GCIdentityValidation.ValidateSelectCharacter({
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = '../unsafe',
         characterId = 1
     })
@@ -91,14 +91,14 @@ end)
 
 GCModuleTest.Register('identity.validation_client_failure_allowlist', 'security', function()
     local valid, validError = GCIdentityValidation.ValidateClientFailure({
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         code = 'GC-IDENTITY-NUI-NOT-READY'
     })
     GCModuleTest.ExpectNotNil(valid, 'known client lifecycle failure is accepted')
     GCModuleTest.ExpectNil(validError, 'known client lifecycle failure has no validation error')
 
     local forged, forgedError = GCIdentityValidation.ValidateClientFailure({
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         code = 'GC-IDENTITY-FORGED-DROP'
     })
     GCModuleTest.ExpectNil(forged, 'unknown client failure cannot request a disconnect')

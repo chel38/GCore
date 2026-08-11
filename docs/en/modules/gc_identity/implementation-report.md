@@ -2,6 +2,11 @@
 
 Date: 2026-08-10
 
+> Historical milestone report. The current `gc_identity 0.3.0-alpha` replaces
+> direct trusted-identifier login with verified email plus a server-observed IP
+> fingerprint. See [Email verification](email-verification.md) and the module
+> README for the active contract.
+
 Audited baseline: `d1abbf0476e0ca3a5e284fe319cedef43839bc87`
 
 Core: `0.1.4-alpha`, API `1`, protocol `1`

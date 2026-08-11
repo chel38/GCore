@@ -3,7 +3,7 @@ import { nuiBridge } from './bridge'
 import type { IdentitySnapshot, NuiBridge } from './types'
 
 const registration: IdentitySnapshot = {
-  protocolVersion: 1,
+  protocolVersion: 2,
   state: 'registration_required',
   account: null,
   characters: [],
@@ -64,6 +64,28 @@ describe('gc_identity NUI', () => {
     expect(root.hidden).toBe(false)
     expect(root.querySelector('[data-view="registration"]')).not.toBeNull()
     expect(root.querySelector('input[type="password"]')).toBeNull()
+    app.destroy()
+  })
+
+  it('renders verification without exposing the expected code', () => {
+    const root = document.querySelector<HTMLElement>('#app')!
+    const app = createIdentityApp(root, { invoke: vi.fn().mockResolvedValue({ ok: true }) })
+    app.receive({
+      type: 'snapshot',
+      payload: {
+        ...registration,
+        state: 'email_verification_pending',
+        verification: {
+          type: 'registration',
+          maskedEmail: 'u***@example.com',
+          expiresIn: 300,
+          resendIn: 60,
+        },
+      },
+    })
+    expect(root.querySelector('[data-view="verification"]')).not.toBeNull()
+    expect(root.textContent).toContain('u***@example.com')
+    expect(root.querySelector<HTMLInputElement>('#verificationCode')?.value).toBe('')
     app.destroy()
   })
 

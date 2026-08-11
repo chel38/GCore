@@ -1,7 +1,7 @@
 {
   "name": "@gcore/gc-identity-nui",
   "private": true,
-  "version": "0.2.1-alpha",
+  "version": "0.3.0-alpha",
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit && vite build",

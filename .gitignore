@@ -24,6 +24,8 @@ desktop.ini
 coverage/
 test-results/
 node_modules/
+**/.env
+!.env.example
 
 # RU: Локальные настройки FiveM (не должны попадать в репозиторий).
 # EN: Local FiveM settings (must not enter the repository).

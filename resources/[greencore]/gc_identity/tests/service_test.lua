@@ -1,6 +1,6 @@
 local function createPayload(requestId, firstName, lastName)
     return {
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = requestId,
         firstName = firstName or 'Anna',
         lastName = lastName or 'Smith'
@@ -44,7 +44,7 @@ GCModuleTest.Register('identity.valid_persistent_identity_flow', 'integration', 
     GCModuleTest.ExpectEqual(character.firstName, 'Anna', 'character DTO returned')
 
     local selected, selectError = GCIdentityService.SelectCharacter(22, {
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'request_2202',
         characterId = character.id
     })
@@ -72,7 +72,7 @@ GCModuleTest.Register('identity.duplicate_requests_are_idempotent', 'integration
     IdentityTest.Reset()
     GCIdentityService.Resolve(24)
     local registration = {
-        protocolVersion = 1,
+        protocolVersion = GCIdentityVersion.protocol,
         requestId = 'register_2400',
         email = 'duplicate@example.test'
     }
@@ -82,7 +82,17 @@ GCModuleTest.Register('identity.duplicate_requests_are_idempotent', 'integration
     GCModuleTest.ExpectFalse(firstReplay, 'first registration is not replay')
     GCModuleTest.ExpectNil(secondError, 'duplicate registration is safe')
     GCModuleTest.ExpectTrue(secondReplay, 'duplicate registration is replay')
-    GCModuleTest.ExpectEqual(secondAccount.id, firstAccount.id, 'duplicate returns same account DTO')
+    GCModuleTest.ExpectTrue(firstAccount.pending, 'first request creates a pending challenge')
+    GCModuleTest.ExpectTrue(secondAccount.pending, 'duplicate returns the same pending result')
+
+    local delivered = IdentityTest.LastMailPayload()
+    local verified, verificationError = GCIdentityService.VerifyEmailCode(24, {
+        protocolVersion = GCIdentityVersion.protocol,
+        requestId = 'verify_2400',
+        code = delivered.code
+    })
+    GCModuleTest.ExpectNil(verificationError, 'verification completes registration')
+    GCModuleTest.ExpectNotNil(verified, 'verified account DTO returned')
 
     local payload = createPayload('request_2401')
     local first, createError, firstCreateReplay = GCIdentityService.CreateCharacter(24, payload)

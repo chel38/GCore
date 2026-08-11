@@ -2,6 +2,10 @@
 
 Audit date: 2026-08-11
 
+> Historical black-screen audit for `0.2.1-alpha`. The fixes remain relevant,
+> while the current email-code and new-IP screens are documented in
+> [Email verification](email-verification.md).
+
 Audited baseline: `293c92238368a5a8c08eaecccd7b0b610ce5f08d`
 
 Fixed identity version: `0.2.1-alpha` (API 1, protocol 1). Core remains

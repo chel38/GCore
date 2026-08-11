@@ -31,10 +31,13 @@ local function resetStore()
         nextAccountId = 1,
         nextIdentifierId = 1,
         nextCharacterId = 1,
+        nextChallengeId = 1,
+        nextVerificationCode = 483921,
         accounts = {},
         identifiers = {},
         characters = {},
-        selections = {}
+        selections = {},
+        challenges = {}
     }
     failureCode = nil
     beforeOperation = nil
@@ -101,6 +104,23 @@ function MemoryRepository.SetAccountStatus(accountId, status)
     return false
 end
 
+function MemoryRepository.SetNextVerificationCode(code)
+    store.nextVerificationCode = tonumber(code)
+end
+
+function MemoryRepository.GetLastChallenge()
+    return copy(store.challenges[#store.challenges])
+end
+
+function MemoryRepository.SetLastChallengeExpires(expiresAt)
+    local challenge = store.challenges[#store.challenges]
+    if challenge then
+        challenge.expiresAt = expiresAt
+        return true
+    end
+    return false
+end
+
 function MemoryRepository.GetCounts()
     local accountCount = 0
     local characterCount = 0
@@ -116,7 +136,8 @@ function MemoryRepository.GetCounts()
     return {
         accounts = accountCount,
         identifiers = #store.identifiers,
-        characters = characterCount
+        characters = characterCount,
+        challenges = #store.challenges
     }
 end
 
@@ -186,6 +207,8 @@ function MemoryRepository.RegisterAccount(email, identifierType, identifier)
     local account = {
         id = store.nextAccountId,
         email = email,
+        emailVerifiedAt = now,
+        lastIpFingerprint = nil,
         status = 'active',
         createdAt = now,
         updatedAt = now,
@@ -231,6 +254,7 @@ function MemoryRepository.CompleteRegistration(accountId, email, identifierType,
     end
 
     account.email = email
+    account.emailVerifiedAt = os.time()
     account.updatedAt = os.time()
     account.lastLoginAt = account.updatedAt
     return accountWithSelection(account)
@@ -364,6 +388,8 @@ function MemoryRepository.ImportLegacyAccount(record)
     local account = {
         id = store.nextAccountId,
         email = nil,
+        emailVerifiedAt = nil,
+        lastIpFingerprint = nil,
         status = 'active',
         createdAt = now,
         updatedAt = record.updatedAt or now,
@@ -406,6 +432,175 @@ function MemoryRepository.ImportLegacyAccount(record)
     end
 
     return accountWithSelection(account), nil, false
+end
+
+
+function MemoryRepository.GenerateVerificationCode()
+    local value = store.nextVerificationCode
+    store.nextVerificationCode = value >= 999999 and 100000 or value + 1
+    return ('%06d'):format(value)
+end
+
+function MemoryRepository.CreateVerificationChallenge(challenge)
+    local isFailed, code = failed()
+    if isFailed then
+        return nil, code
+    end
+
+    local now = os.time()
+    for _, existing in ipairs(store.challenges) do
+        if existing.bindingKey == challenge.bindingKey
+            and existing.type == challenge.type
+            and not existing.consumedAt then
+            existing.consumedAt = now
+        end
+    end
+
+    local created = copy(challenge)
+    created.id = store.nextChallengeId
+    created.attempts = 0
+    created.createdAt = now
+    created.lastSentAt = now
+    created.consumedAt = nil
+    store.nextChallengeId = store.nextChallengeId + 1
+    table.insert(store.challenges, created)
+    return copy(created)
+end
+
+function MemoryRepository.GetVerificationChallenge(bindingKey, verificationType)
+    local isFailed, code = failed()
+    if isFailed then
+        return nil, code
+    end
+
+    for index = #store.challenges, 1, -1 do
+        local challenge = store.challenges[index]
+        if challenge.bindingKey == bindingKey
+            and challenge.type == verificationType
+            and not challenge.consumedAt then
+            return copy(challenge)
+        end
+    end
+    return nil, 'GC-IDENTITY-EMAIL-VERIFICATION-REQUIRED'
+end
+
+function MemoryRepository.RecordVerificationFailure(challengeId)
+    local isFailed, code = failed()
+    if isFailed then
+        return false, code
+    end
+
+    for _, challenge in ipairs(store.challenges) do
+        if challenge.id == challengeId and not challenge.consumedAt then
+            challenge.attempts = challenge.attempts + 1
+            if challenge.attempts >= challenge.maxAttempts then
+                challenge.consumedAt = os.time()
+            end
+            return true
+        end
+    end
+    return false, 'GC-IDENTITY-EMAIL-VERIFICATION-REQUIRED'
+end
+
+function MemoryRepository.InvalidateVerificationChallenge(challengeId)
+    for _, challenge in ipairs(store.challenges) do
+        if challenge.id == challengeId then
+            challenge.consumedAt = challenge.consumedAt or os.time()
+            return true
+        end
+    end
+    return false
+end
+
+local function activeChallenge(challengeId, verificationType)
+    for _, challenge in ipairs(store.challenges) do
+        if challenge.id == challengeId and challenge.type == verificationType
+            and not challenge.consumedAt and challenge.expiresAt > os.time()
+            and challenge.attempts < challenge.maxAttempts then
+            return challenge
+        end
+    end
+    return nil
+end
+
+function MemoryRepository.CompleteVerifiedRegistration(
+    challengeId,
+    accountId,
+    email,
+    identifierType,
+    identifier,
+    ipFingerprint
+)
+    local challenge = activeChallenge(challengeId, 'registration')
+    if not challenge or challenge.email ~= email or challenge.accountId ~= accountId then
+        return nil, 'GC-IDENTITY-EMAIL-CHALLENGE-STALE'
+    end
+
+    local emailAccount = MemoryRepository.FindAccountByEmail(email)
+    if emailAccount and emailAccount.id ~= accountId then
+        return nil, 'GC-IDENTITY-EMAIL-TAKEN'
+    end
+
+    local account
+    if accountId then
+        account = store.accounts[accountId]
+        local identifierAccount = MemoryRepository.FindAccountByIdentifier(identifierType, identifier)
+        if not account or not identifierAccount or identifierAccount.id ~= accountId then
+            return nil, 'GC-IDENTITY-REGISTRATION-CONFLICT'
+        end
+    else
+        local identifierAccount = MemoryRepository.FindAccountByIdentifier(identifierType, identifier)
+        if identifierAccount then
+            return nil, 'GC-IDENTITY-REGISTRATION-CONFLICT'
+        end
+
+        local now = os.time()
+        account = {
+            id = store.nextAccountId,
+            email = email,
+            emailVerifiedAt = now,
+            lastIpFingerprint = ipFingerprint,
+            status = 'active',
+            createdAt = now,
+            updatedAt = now,
+            lastLoginAt = now
+        }
+        store.nextAccountId = store.nextAccountId + 1
+        store.accounts[account.id] = account
+        table.insert(store.identifiers, {
+            id = store.nextIdentifierId,
+            accountId = account.id,
+            identifierType = identifierType,
+            identifier = identifier,
+            createdAt = now,
+            lastSeenAt = now
+        })
+        store.nextIdentifierId = store.nextIdentifierId + 1
+    end
+
+    local now = os.time()
+    account.email = email
+    account.emailVerifiedAt = now
+    account.lastIpFingerprint = ipFingerprint
+    account.updatedAt = now
+    account.lastLoginAt = now
+    challenge.consumedAt = now
+    return accountWithSelection(account)
+end
+
+function MemoryRepository.CompleteVerifiedAuthentication(challengeId, accountId, ipFingerprint)
+    local challenge = activeChallenge(challengeId, 'authentication')
+    local account = store.accounts[accountId]
+    if not challenge or challenge.accountId ~= accountId or not account then
+        return nil, 'GC-IDENTITY-EMAIL-CHALLENGE-STALE'
+    end
+
+    local now = os.time()
+    account.lastIpFingerprint = ipFingerprint
+    account.lastLoginAt = now
+    account.updatedAt = now
+    challenge.consumedAt = now
+    return accountWithSelection(account)
 end
 
 GCIdentityRepositories.memory = MemoryRepository

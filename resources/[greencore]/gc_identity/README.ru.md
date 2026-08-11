@@ -4,9 +4,9 @@
 GCore. `gc_core` отвечает за connection/session/spawn, а этот resource — за
 регистрацию, авторизацию по trusted identifier, персонажей и identity readiness.
 
-- Resource version: `0.2.1-alpha`
-- Identity API: `1` (backward-compatible, добавлен health export)
-- Identity protocol: `1`
+- Resource version: `0.3.0-alpha`
+- Identity API: `1` (backward-compatible)
+- Identity protocol: `2` (обязательный email verification handshake)
 - Требуемый Core API: `>= 1`
 - Persistence: MariaDB через `oxmysql`
 - NUI: TypeScript + Tailwind CSS
@@ -18,7 +18,9 @@ GCore. `gc_core` отвечает за connection/session/spawn, а этот res
 ```text
 trusted server-side FiveM license
             ↓
-аккаунта нет → явная регистрация email
+аккаунта нет → email → одноразовый code от сервера
+            ↓
+verified challenge → transaction создаёт account
             ↓
 создание/выбор своего персонажа
             ↓
@@ -28,7 +30,8 @@ identity state = ready
 Повторное подключение:
 
 ```text
-trusted license → сохранённый аккаунт → сохранённый выбор → ready
+trusted license + тот же server-observed IP → автоматический вход
+trusted license + новый IP → email code → авторизация
 ```
 
 Пароли на этом этапе намеренно отключены. Модуль не собирает, не передаёт, не
@@ -43,6 +46,10 @@ authorization state и утверждение ownership никогда не сч
 
 ```cfg
 set mysql_connection_string "mysql://gcore:CHANGE_ME@127.0.0.1:3306/gcore?charset=utf8mb4"
+set gcore_mail_service_url "http://127.0.0.1:8091"
+set gcore_mail_token "token-совпадающий-с-mail-service"
+set gcore_identity_challenge_secret "отдельный-random-secret-минимум-32-символа"
+set gcore_ip_fingerprint_secret "другой-random-secret-минимум-32-символа"
 ensure oxmysql
 ensure gc_core
 ensure gc_identity
@@ -54,8 +61,12 @@ ensure gc_identity
 
 Старый adapter `data/identities.json` используется только как read-only источник
 миграции. При `storage.importLegacyJson = true` записи импортируются
-идемпотентно и должны завершить email registration. Перед production migration
+идемпотентно и должны завершить email verification. Перед production migration
 сделайте backup MariaDB и legacy file.
+
+До verification flows запустите отдельный localhost-only
+[GCore Mail Service](../../../mail-service/README.ru.md). Same-IP вход не зависит
+от почты; registration и new-IP login при её отказе всегда fail-closed.
 
 ## NUI и команды
 
@@ -76,6 +87,7 @@ Database degradation и исчерпание bounded hello показывают 
 
 - `/gcidentity` — запросить свежий snapshot;
 - `/gcregister email@example.com` — запросить регистрацию;
+- `/gcverify 483921` — отправить verification code;
 - `/gccreate Имя Фамилия` — запросить создание персонажа;
 - `/gcselect ID` — запросить выбор.
 
@@ -83,6 +95,8 @@ Database degradation и исчерпание bounded hello показывают 
 
 ```text
 uninitialized → loading → registration_required → registering
+                         → email_verification_pending → registering
+loading → auth_verification_required → loading
                          ↘ authorized → character_required
                                          ↓
                                   character_selected → ready
@@ -121,16 +135,17 @@ end
 
 ## Network contract
 
-Client → server (internal): `hello`, `registerAccount`, `createCharacter`,
-`selectCharacter`, allowlisted `clientFailure`, `exit`. Только server → client
+Client → server (internal): `hello`, `registerAccount`, `verifyEmail`,
+`resendVerification`, `createCharacter`, `selectCharacter`, allowlisted `clientFailure`, `exit`. Только server → client
 (internal): `snapshot`, `rejected`. Exact schemas находятся в `shared/events.lua` и
 `server/validation.lua`. Server-only client handlers требуют FiveM origin
 `source == 65535`.
 
 ## Restart policy
 
-`restart gc_identity` выполняет bounded recovery online players и восстанавливает
-persisted account/selection. При рестарте `gc_core` FiveM останавливает declared
+`restart gc_identity` выполняет bounded recovery online players. DB-backed
+challenges переживают restart до TTL и привязываются к новой runtime session;
+persisted account/selection сохраняются. При рестарте `gc_core` FiveM останавливает declared
 dependants; затем оператор должен выполнить `ensure gc_identity`. Это поведение
 resource dependency FiveM, а не потеря данных.
 
@@ -148,6 +163,8 @@ pnpm build
 [persistence design](../../../docs/ru/modules/gc_identity/persistence-design.md) и
 [implementation report](../../../docs/ru/modules/gc_identity/implementation-report.md),
 а также [NUI lifecycle audit](../../../docs/ru/modules/gc_identity/nui-lifecycle-audit.md).
+Security flow описан в документе
+[email verification](../../../docs/ru/modules/gc_identity/email-verification.md).
 
 ## Troubleshooting
 
@@ -156,6 +173,8 @@ pnpm build
 - `GC-IDENTITY-MIGRATION-FAILED`: найдите первую упавшую migration; не обходите
   её fallback-ом.
 - `GC-IDENTITY-EMAIL-TAKEN`: normalized email уже занят.
+- `GC-IDENTITY-EMAIL-CODE-INVALID/EXPIRED/ATTEMPTS`: нужен правильный/новый code.
+- `GC-IDENTITY-MAIL-SEND-FAILED/TIMEOUT`: проверьте localhost mail-service и SMTP.
 - `GC-IDENTITY-PROTOCOL-MISMATCH`: client/server builds различаются.
 - `GC-IDENTITY-HELLO-TIMEOUT`: authoritative identity response не пришёл за
   bounded retry window; проверьте core и database health.

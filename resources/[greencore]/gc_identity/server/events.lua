@@ -87,6 +87,20 @@ registerIngress(
     GCIdentityService.RegisterAccount
 )
 
+registerIngress(
+    GCIdentityEvents.server.verifyEmail,
+    'verifyEmail',
+    GCIdentityValidation.ValidateVerificationCode,
+    GCIdentityService.VerifyEmailCode
+)
+
+registerIngress(
+    GCIdentityEvents.server.resendVerification,
+    'resendVerification',
+    GCIdentityValidation.ValidateResendVerification,
+    GCIdentityService.ResendVerification
+)
+
 RegisterNetEvent(GCIdentityEvents.server.clientFailure, function(payload)
     local playerSource = source
     local allowed, rateError = GCIdentityRateLimit.Check(playerSource, 'clientFailure')

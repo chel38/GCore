@@ -1,0 +1,30 @@
+{
+  "name": "@gcore/mail-service",
+  "version": "0.1.0-alpha",
+  "private": true,
+  "type": "module",
+  "description": "Localhost-only SMTP delivery boundary for GCore verification emails",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "dotenv": "17.2.3",
+    "fastify": "5.11.3",
+    "nodemailer": "9.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/nodemailer": "7.0.5",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "packageManager": "pnpm@11.18.0"
+}

@@ -240,6 +240,10 @@ foreach ($module in $moduleDirectories) {
             'server/database.lua',
             'server/migrations/registry.lua',
             'server/migrations/001_initial_identity.lua',
+            'server/migrations/002_email_verification_security.lua',
+            'server/crypto.lua',
+            'server/endpoint.lua',
+            'server/mail_client.lua',
             'server/repositories/oxmysql.lua',
             'web/package.json',
             'web/pnpm-lock.yaml',
@@ -282,6 +286,34 @@ foreach ($module in $moduleDirectories) {
                 Add-Failure "Module $moduleName calls unknown gc_core export $calledMethod in $relativeModuleFile."
             }
         }
+    }
+}
+
+$mailServiceRoot = Join-Path $repoRoot 'mail-service'
+
+foreach ($mailPath in @(
+    'package.json',
+    'pnpm-lock.yaml',
+    'pnpm-workspace.yaml',
+    '.env.example',
+    'src/server.ts',
+    'src/mailer.ts',
+    'templates/verification.html',
+    'templates/verification.txt',
+    'tests/security.test.ts',
+    'README.md',
+    'README.ru.md'
+)) {
+    if (-not (Test-Path -LiteralPath (Join-Path $mailServiceRoot $mailPath))) {
+        Add-Failure "Mail service is missing $mailPath."
+    }
+}
+
+$trackedEnvFiles = @(& git -C $repoRoot ls-files '*.env')
+
+foreach ($trackedEnvFile in $trackedEnvFiles) {
+    if ($trackedEnvFile -notmatch '(?:^|/)\.env\.example$') {
+        Add-Failure "Secret-bearing environment file is tracked: $trackedEnvFile"
     }
 }
 

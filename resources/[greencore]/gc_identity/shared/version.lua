@@ -4,12 +4,12 @@
 GCIdentityVersion = {
     resource = {
         major = 0,
-        minor = 2,
-        patch = 1,
+        minor = 3,
+        patch = 0,
         prerelease = 'alpha'
     },
     api = 1,
-    protocol = 1
+    protocol = 2
 }
 
 function GCIdentityVersion.GetString()
