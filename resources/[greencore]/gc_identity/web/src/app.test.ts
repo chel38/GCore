@@ -1,4 +1,5 @@
 import { createIdentityApp } from './app'
+import { nuiBridge } from './bridge'
 import type { IdentitySnapshot, NuiBridge } from './types'
 
 const registration: IdentitySnapshot = {
@@ -20,11 +21,47 @@ function deferred<T>() {
 describe('gc_identity NUI', () => {
   beforeEach(() => { document.body.innerHTML = '<main id="app"></main>' })
 
+  it('stays visually hidden until Lua sends an authoritative state', () => {
+    const root = document.querySelector<HTMLElement>('#app')!
+    const app = createIdentityApp(root, { invoke: vi.fn().mockResolvedValue({ ok: true }) })
+    expect(root.innerHTML).toBe('')
+    expect(root.hidden).toBe(true)
+    expect(root.querySelector('.identity-shell')).toBeNull()
+    app.destroy()
+  })
+
+  it('keeps an already-ready identity hidden without a black flash', () => {
+    const root = document.querySelector<HTMLElement>('#app')!
+    const app = createIdentityApp(root, { invoke: vi.fn().mockResolvedValue({ ok: true }) })
+    app.receive({ type: 'snapshot', payload: { ...registration, state: 'ready' } })
+    expect(root.innerHTML).toBe('')
+    expect(root.hidden).toBe(true)
+    app.destroy()
+  })
+
+  it('renders a terminal lifecycle error with retry instead of an empty black layer', () => {
+    const root = document.querySelector<HTMLElement>('#app')!
+    const app = createIdentityApp(root, { invoke: vi.fn().mockResolvedValue({ ok: true }) })
+    app.receive({ type: 'lifecycleError', payload: { code: 'GC-IDENTITY-HELLO-TIMEOUT' } })
+    expect(root.hidden).toBe(false)
+    expect(root.querySelector('[data-view="lifecycle-error"]')).not.toBeNull()
+    expect(root.textContent).toContain('GC-IDENTITY-HELLO-TIMEOUT')
+    app.receive({ type: 'reset' })
+    expect(root.innerHTML).toBe('')
+    expect(root.hidden).toBe(true)
+    app.destroy()
+  })
+
+  it('uses an inert ready bridge in standalone browser development', async () => {
+    await expect(nuiBridge.invoke('ready', {})).resolves.toEqual({ ok: true })
+  })
+
   it('renders registration without a password field', () => {
     const bridge: NuiBridge = { invoke: vi.fn().mockResolvedValue({ ok: true }) }
     const root = document.querySelector<HTMLElement>('#app')!
     const app = createIdentityApp(root, bridge)
     app.receive({ type: 'snapshot', payload: registration })
+    expect(root.hidden).toBe(false)
     expect(root.querySelector('[data-view="registration"]')).not.toBeNull()
     expect(root.querySelector('input[type="password"]')).toBeNull()
     app.destroy()

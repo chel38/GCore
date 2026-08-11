@@ -312,6 +312,8 @@ function IdentityTest.FrozenState()
 end
 
 function IdentityTest.ReloadClient()
+    eventHandlers.onClientResourceStart = {}
+    eventHandlers.onClientResourceStop = {}
     GCModuleTest.Load('client/main.lua')
 end
 

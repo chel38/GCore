@@ -9,7 +9,8 @@
 
 * { box-sizing: border-box; }
 html, body, #app { width: 100%; min-height: 100%; margin: 0; }
-body { overflow: hidden; background: transparent; }
+html, body { overflow: hidden; background-color: transparent; }
+#app[hidden] { display: none; pointer-events: none; }
 button, input { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: wait; opacity: .55; }
@@ -63,6 +64,7 @@ h3 { margin-bottom: .25rem; color: #f0fdf4; font-size: 1rem; }
 .eyebrow { margin-bottom: .35rem; color: #4ade80; font-size: .72rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
 .muted, .field-note { color: #94a3a8; line-height: 1.65; }
 .field-note { margin: .55rem 0 1.25rem; font-size: .78rem; }
+.diagnostic-code { margin: 1rem 0 0; color: #64748b; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .72rem; }
 
 form { margin-top: 1.5rem; }
 label { display: block; margin-bottom: .45rem; color: #d1fae5; font-size: .82rem; font-weight: 700; }

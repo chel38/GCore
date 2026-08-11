@@ -40,6 +40,10 @@ local function validateRequestId(requestId)
         and requestId:match('^[A-Za-z0-9_-]+$') ~= nil
 end
 
+local allowedClientFailures = {
+    ['GC-IDENTITY-NUI-NOT-READY'] = true
+}
+
 local function trim(value)
     return value:match('^%s*(.-)%s*$')
 end
@@ -221,4 +225,26 @@ function GCIdentityValidation.ValidateExit(payload)
     end
 
     return { protocolVersion = payload.protocolVersion }
+end
+
+function GCIdentityValidation.ValidateClientFailure(payload)
+    if not exactKeys(payload, {
+        protocolVersion = true,
+        code = true
+    }) then
+        return nil, 'GC-IDENTITY-PAYLOAD-SCHEMA'
+    end
+
+    if not validateProtocol(payload.protocolVersion) then
+        return nil, 'GC-IDENTITY-PROTOCOL-MISMATCH'
+    end
+
+    if type(payload.code) ~= 'string' or not allowedClientFailures[payload.code] then
+        return nil, 'GC-IDENTITY-CLIENT-FAILURE-INVALID'
+    end
+
+    return {
+        protocolVersion = payload.protocolVersion,
+        code = payload.code
+    }
 end

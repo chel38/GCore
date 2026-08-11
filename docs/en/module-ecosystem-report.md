@@ -1,8 +1,8 @@
 # GCore Module Ecosystem First-Stage Report
 
-> Historical report for the original `gc_identity 0.1.0-alpha` MVP. The current
-> persistent `0.2.0-alpha` result is documented in
-> [gc_identity implementation report](modules/gc_identity/implementation-report.md).
+> Historical report for the original `gc_identity 0.1.0-alpha` MVP. Persistence
+> was introduced in `0.2.0-alpha`; the current NUI lifecycle result is documented
+> in the [0.2.1-alpha lifecycle audit](modules/gc_identity/nui-lifecycle-audit.md).
 
 ## 1. Executive Summary
 

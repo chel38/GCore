@@ -5,7 +5,7 @@ domain for GCore. `gc_core` owns connection/session/spawn; this resource owns
 registration, trusted identifier authorization, characters, and identity
 readiness.
 
-- Resource version: `0.2.0-alpha`
+- Resource version: `0.2.1-alpha`
 - Identity API: `1` (backward-compatible, additive health export)
 - Identity protocol: `1`
 - Required Core API: `>= 1`
@@ -61,10 +61,18 @@ production migration.
 
 ## NUI and commands
 
-The NUI provides loading, registration, character creation/selection, errors,
-and an exit confirmation. It holds focus and freezes the local presentation ped
-until authoritative state is `ready`. NUI callbacks only request actions; the
-server validates lifecycle, exact schema, rate, replay ID, and ownership.
+The NUI document has a transparent canvas and an explicitly hidden root when
+FiveM eagerly loads its HTML. JavaScript first acknowledges `ready`; Lua then
+replays the latest authoritative snapshot. Only a
+non-ready snapshot may open the UI, acquire focus, and freeze the local
+presentation ped. A `ready` snapshot remains hidden and releases both focus and
+the ped. NUI callbacks only request actions; the server validates lifecycle,
+exact schema, rate, replay ID, and ownership.
+
+Database degradation and bounded hello exhaustion render a diagnostic retry/exit
+view. If the JavaScript bundle never acknowledges readiness, the client releases
+focus and the server performs one validated controlled disconnect instead of
+leaving an infinite black screen.
 
 Diagnostic commands remain available:
 
@@ -116,8 +124,8 @@ end
 ## Network contract
 
 Client → server (internal): `hello`, `registerAccount`, `createCharacter`,
-`selectCharacter`, `exit`. Server → client only (internal): `snapshot`,
-`rejected`. Exact schemas live in `shared/events.lua` and
+`selectCharacter`, allowlisted `clientFailure`, `exit`. Server → client only
+(internal): `snapshot`, `rejected`. Exact schemas live in `shared/events.lua` and
 `server/validation.lua`. Server-only client handlers require FiveM origin
 `source == 65535`.
 
@@ -140,7 +148,8 @@ pnpm build
 
 See the [design](../../../docs/en/modules/gc_identity/design.md),
 [persistence design](../../../docs/en/modules/gc_identity/persistence-design.md),
-and [implementation report](../../../docs/en/modules/gc_identity/implementation-report.md).
+[implementation report](../../../docs/en/modules/gc_identity/implementation-report.md),
+and [NUI lifecycle audit](../../../docs/en/modules/gc_identity/nui-lifecycle-audit.md).
 
 ## Troubleshooting
 
@@ -150,4 +159,8 @@ and [implementation report](../../../docs/en/modules/gc_identity/implementation-
   bypass it or enable a fallback.
 - `GC-IDENTITY-EMAIL-TAKEN`: the normalized email is already owned.
 - `GC-IDENTITY-PROTOCOL-MISMATCH`: client/server module builds differ.
+- `GC-IDENTITY-HELLO-TIMEOUT`: no authoritative identity response arrived within
+  the bounded retry window; inspect core and database health.
+- `GC-IDENTITY-NUI-NOT-READY`: the built JavaScript did not call the NUI-ready
+  callback; rebuild `web/dist` and inspect the FiveM client log.
 - stopped after `restart gc_core`: run `ensure gc_identity`.

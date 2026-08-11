@@ -12,6 +12,14 @@ function resourceName(): string {
 
 export const nuiBridge: NuiBridge = {
   async invoke<TPayload extends object>(callback: string, payload: TPayload): Promise<NuiResponse> {
+    // EN: Browser development has no FiveM callback endpoint. Keep the transport
+    // inert there; production uses GetParentResourceName and the real NUI bridge.
+    // RU: В браузерной разработке нет FiveM callback endpoint. Там transport
+    // остаётся inert; production использует GetParentResourceName и реальный NUI.
+    if (typeof window.GetParentResourceName !== 'function') {
+      return { ok: true }
+    }
+
     const response = await fetch(`https://${resourceName()}/${callback}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json; charset=UTF-8' },

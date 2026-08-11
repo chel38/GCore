@@ -1,4 +1,4 @@
-# gc_identity 0.2.0-alpha — implemented design
+# gc_identity 0.2.1-alpha — implemented design
 
 Status: implemented and validated with automated tests and a one-client real
 FXServer/MariaDB smoke test. Identity API 1 and protocol 1 remain compatible.
@@ -104,6 +104,7 @@ private.
 | `gc_identity:server:registerAccount` | client → server | `{ protocolVersion, requestId, email }` |
 | `gc_identity:server:createCharacter` | client → server | `{ protocolVersion, requestId, firstName, lastName }` |
 | `gc_identity:server:selectCharacter` | client → server | `{ protocolVersion, requestId, characterId }` |
+| `gc_identity:server:clientFailure` | client → server | allowlisted `{ protocolVersion, code }` |
 | `gc_identity:server:exit` | client → server | `{ protocolVersion }` |
 | `gc_identity:client:snapshot` | server → client only | Public snapshot |
 | `gc_identity:client:rejected` | server → client only | `{ requestId?, code }` |
@@ -111,6 +112,12 @@ private.
 Server-only client events require `source == 65535`. NUI callbacks map to these
 requests; local pending state prevents double submit, while authoritative replay
 protection remains server-side.
+
+The eagerly loaded HTML uses a transparent document canvas and an explicitly
+hidden initial root. The JavaScript-ready callback causes Lua to replay the stored
+snapshot; focus/freeze are applied only after that ACK. Terminal storage/hello
+errors have a retry/exit view. Missing JavaScript readiness is bounded and ends
+in a validated controlled disconnect.
 
 ## Persistence and recovery
 
@@ -135,4 +142,5 @@ state. Reconnect resolves the same account/selection without duplicate writes.
 - stable diagnostic codes without identifiers, email, or secrets in logs.
 
 See [persistence design](persistence-design.md) and
-[implementation report](implementation-report.md).
+[implementation report](implementation-report.md), plus the
+[NUI lifecycle audit](nui-lifecycle-audit.md).

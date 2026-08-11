@@ -1,4 +1,4 @@
-# gc_identity 0.2.0-alpha — реализованный design
+# gc_identity 0.2.1-alpha — реализованный design
 
 Статус: реализовано и проверено automated tests и реальным smoke-тестом с одним
 FiveM client и MariaDB. Identity API 1 и protocol 1 остались совместимыми.
@@ -103,6 +103,7 @@ timestamps, SQL metadata, replay/rate state и mutable references остаютс
 | `gc_identity:server:registerAccount` | client → server | `{ protocolVersion, requestId, email }` |
 | `gc_identity:server:createCharacter` | client → server | `{ protocolVersion, requestId, firstName, lastName }` |
 | `gc_identity:server:selectCharacter` | client → server | `{ protocolVersion, requestId, characterId }` |
+| `gc_identity:server:clientFailure` | client → server | allowlisted `{ protocolVersion, code }` |
 | `gc_identity:server:exit` | client → server | `{ protocolVersion }` |
 | `gc_identity:client:snapshot` | только server → client | Public snapshot |
 | `gc_identity:client:rejected` | только server → client | `{ requestId?, code }` |
@@ -110,6 +111,12 @@ timestamps, SQL metadata, replay/rate state и mutable references остаютс
 Server-only client events требуют `source == 65535`. NUI callbacks формируют эти
 requests; локальный pending state блокирует double submit, а authoritative replay
 защищается на сервере.
+
+Eagerly loaded HTML использует прозрачный canvas документа и явно скрытый initial
+root. После JavaScript-ready callback Lua повторяет сохранённый snapshot;
+focus/freeze применяются только после этого ACK. Terminal storage/hello errors
+имеют retry/exit view. Отсутствие JavaScript readiness ограничено timeout и
+заканчивается validated controlled disconnect.
 
 ## Persistence и recovery
 
@@ -134,4 +141,5 @@ runtime state. Reconnect находит тот же account/selection без dup
 - stable diagnostic codes без identifiers, email и secrets в logs.
 
 См. [persistence design](persistence-design.md) и
-[implementation report](implementation-report.md).
+[implementation report](implementation-report.md), а также
+[NUI lifecycle audit](nui-lifecycle-audit.md).

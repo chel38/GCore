@@ -43,6 +43,8 @@ export interface NuiResponse {
 export type NuiMessage =
   | { type: 'snapshot'; payload: IdentitySnapshot }
   | { type: 'rejected'; payload: { code: string; requestId?: string } }
+  | { type: 'lifecycleError'; payload: { code: string } }
+  | { type: 'reset' }
 
 export interface NuiBridge {
   invoke<TPayload extends object>(callback: string, payload: TPayload): Promise<NuiResponse>

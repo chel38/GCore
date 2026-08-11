@@ -84,6 +84,28 @@
 1. Проверьте обработчик `onResourceStart`.
 2. Проверьте, что клиент получает `forceResync`.
 
+## Чёрный экран или не появляется identity NUI
+
+**Ожидаемый lifecycle**: eagerly loaded identity page пуста до JavaScript-ready
+callback и authoritative snapshot. У returning player со state `ready` UI вообще
+не открывается. Registration states открывают его и получают focus.
+
+1. Найдите `[GC][IDENTITY][CLIENT]` в FiveM client log.
+2. `GC-IDENTITY-NUI-NOT-READY`: выполните `pnpm build`, проверьте manifest paths и
+   перезапустите `gc_identity`. Server disconnect — намеренный fail-closed
+   recovery; перед ним focus/freeze снимаются.
+3. `GC-IDENTITY-HELLO-TIMEOUT`: проверьте readiness `gc_core` и server identity
+   logs. Не добавляйте произвольный sleep.
+4. `GC-IDENTITY-DATABASE-UNAVAILABLE`: проверьте MariaDB, `oxmysql`, connection
+   string вне Git и порядок ресурсов.
+5. Убедитесь, что `web/dist/index.html` ссылается на `./assets/...`, а каждый файл
+   упакован `fxmanifest.lua`.
+6. Убедитесь, что неактивный document не задаёт `color-scheme: dark`, а `#app`
+   явно скрыт до появления реального view. Пустой NUI document должен иметь
+   прозрачный canvas в FiveM CEF.
+
+См. [аудит identity NUI lifecycle](modules/gc_identity/nui-lifecycle-audit.md).
+
 ## Следующий шаг
 
 Перейдите к [Тестированию](15-testing.md).

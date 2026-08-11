@@ -13,7 +13,7 @@ gc_identity ───────→ gc_core Public API v1
 ```text
 gc_core 0.1.4-alpha (API 1)
 ├── gc_example 0.1.0-alpha (reference, без Public API)
-└── gc_identity 0.2.0-alpha (Identity API 1, требуется oxmysql/MariaDB)
+└── gc_identity 0.2.1-alpha (Identity API 1, требуется oxmysql/MariaDB)
 ```
 
 `gc_core` не зависит от модулей. `gc_example` и `gc_identity` также не зависят

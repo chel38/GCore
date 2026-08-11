@@ -1,8 +1,8 @@
 # Отчёт о первом этапе модульной экосистемы GCore
 
 > Исторический отчёт по первоначальному MVP `gc_identity 0.1.0-alpha`.
-> Актуальный persistent milestone `0.2.0-alpha` описан в
-> [implementation report](modules/gc_identity/implementation-report.md).
+> Persistence появился в `0.2.0-alpha`, а актуальный NUI lifecycle описан в
+> [аудите версии 0.2.1-alpha](modules/gc_identity/nui-lifecycle-audit.md).
 
 ## 1. Executive Summary
 

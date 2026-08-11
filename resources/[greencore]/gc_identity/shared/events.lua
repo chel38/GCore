@@ -7,6 +7,7 @@ GCIdentityEvents = {
         registerAccount = 'gc_identity:server:registerAccount',
         createCharacter = 'gc_identity:server:createCharacter',
         selectCharacter = 'gc_identity:server:selectCharacter',
+        clientFailure = 'gc_identity:server:clientFailure',
         exit = 'gc_identity:server:exit'
     },
     client = {

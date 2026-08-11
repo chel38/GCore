@@ -88,3 +88,23 @@ GCModuleTest.Register('identity.validation_email_policy', 'unit', function()
         )
     end
 end)
+
+GCModuleTest.Register('identity.validation_client_failure_allowlist', 'security', function()
+    local valid, validError = GCIdentityValidation.ValidateClientFailure({
+        protocolVersion = 1,
+        code = 'GC-IDENTITY-NUI-NOT-READY'
+    })
+    GCModuleTest.ExpectNotNil(valid, 'known client lifecycle failure is accepted')
+    GCModuleTest.ExpectNil(validError, 'known client lifecycle failure has no validation error')
+
+    local forged, forgedError = GCIdentityValidation.ValidateClientFailure({
+        protocolVersion = 1,
+        code = 'GC-IDENTITY-FORGED-DROP'
+    })
+    GCModuleTest.ExpectNil(forged, 'unknown client failure cannot request a disconnect')
+    GCModuleTest.ExpectEqual(
+        forgedError,
+        'GC-IDENTITY-CLIENT-FAILURE-INVALID',
+        'unknown client failure has a stable validation code'
+    )
+end)

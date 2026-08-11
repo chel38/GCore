@@ -84,6 +84,28 @@ Below are common issues and their solutions.
 1. Check the `onResourceStart` handler.
 2. Check that the client receives `forceResync`.
 
+## Black screen or identity NUI does not appear
+
+**Expected lifecycle**: an eagerly loaded identity page is empty until its
+JavaScript-ready callback and an authoritative snapshot. A returning `ready`
+player never opens the UI. Registration states open it and acquire focus.
+
+1. Find `[GC][IDENTITY][CLIENT]` in the FiveM client log.
+2. `GC-IDENTITY-NUI-NOT-READY`: run `pnpm build`, confirm the manifest paths and
+   restart `gc_identity`. The server disconnect is intentional fail-closed
+   recovery; focus/freeze are released first.
+3. `GC-IDENTITY-HELLO-TIMEOUT`: inspect `gc_core` readiness and server identity
+   logs. Do not add an arbitrary sleep.
+4. `GC-IDENTITY-DATABASE-UNAVAILABLE`: verify MariaDB, `oxmysql`, the connection
+   string outside Git, and resource order.
+5. Confirm `web/dist/index.html` references `./assets/...` and every referenced
+   file is packaged by `fxmanifest.lua`.
+6. Confirm the inactive document does not force `color-scheme: dark` and that
+   `#app` remains explicitly hidden until a real view is rendered. An empty NUI
+   document must have a transparent canvas in FiveM CEF.
+
+See the [identity NUI lifecycle audit](modules/gc_identity/nui-lifecycle-audit.md).
+
 ## Next step
 
 Go to [Testing](15-testing.md).

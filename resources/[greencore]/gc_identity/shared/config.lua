@@ -27,6 +27,7 @@ GCIdentityConfig = {
         registration = { maximum = 3, windowMs = 60000 },
         createCharacter = { maximum = 3, windowMs = 60000 },
         selectCharacter = { maximum = 10, windowMs = 60000 },
+        clientFailure = { maximum = 2, windowMs = 30000 },
         exit = { maximum = 2, windowMs = 30000 }
     },
     replayCacheSize = 32,
@@ -36,6 +37,7 @@ GCIdentityConfig = {
     },
     client = {
         nuiReadyTimeoutMs = 10000,
-        restrictControls = true
+        restrictControls = true,
+        debug = false
     }
 }

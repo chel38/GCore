@@ -4,7 +4,10 @@ local helloAcknowledged = false
 local requestSequence = 0
 local uiReady = false
 local uiOpen = false
+local uiFailure
+local clientFailureReported = false
 local restrictionGeneration = 0
+local nuiWatchGeneration = 0
 local pendingRequests = {}
 
 local validStates = {
@@ -65,6 +68,12 @@ local function nextRequestId()
     return ('identity_%d_%d'):format(GetGameTimer(), requestSequence)
 end
 
+local function debugLog(message)
+    if GCIdentityConfig.client.debug then
+        print(('[GC][IDENTITY][CLIENT] %s'):format(message))
+    end
+end
+
 local function setRestricted(restricted)
     if uiOpen == restricted then
         return
@@ -74,6 +83,7 @@ local function setRestricted(restricted)
     restrictionGeneration = restrictionGeneration + 1
     local generation = restrictionGeneration
     SetNuiFocus(restricted, restricted)
+    debugLog(restricted and 'NUI focus acquired' or 'NUI focus released')
 
     local ped = PlayerPedId()
 
@@ -91,39 +101,97 @@ local function setRestricted(restricted)
     end
 end
 
-local function sendSnapshotToNui()
-    if not uiReady or not currentSnapshot then
+local function sendCurrentStateToNui()
+    if not uiReady then
         return
     end
 
-    SendNUIMessage({
-        type = 'snapshot',
-        payload = currentSnapshot
-    })
+    if currentSnapshot then
+        SendNUIMessage({
+            type = 'snapshot',
+            payload = currentSnapshot
+        })
+    elseif uiFailure then
+        SendNUIMessage({
+            type = 'lifecycleError',
+            payload = { code = uiFailure }
+        })
+    end
 end
 
 local function applySnapshot(payload)
     currentSnapshot = payload
+    uiFailure = nil
     helloAcknowledged = true
     pendingRequests = {}
 
-    if payload.state == 'ready' then
-        setRestricted(false)
+    -- EN: Focus is acquired only after the JS-ready callback. A loaded HTML page
+    -- is not evidence that the NUI bundle can render or answer callbacks.
+    -- RU: Focus выдаётся только после JS-ready callback. Загруженный HTML ещё не
+    -- доказывает, что NUI bundle умеет отрисоваться и отвечать на callbacks.
+    if uiReady then
+        setRestricted(payload.state ~= 'ready')
     else
-        setRestricted(true)
+        setRestricted(false)
     end
 
-    sendSnapshotToNui()
+    sendCurrentStateToNui()
     print(('[GC][IDENTITY] state=%s characters=%d'):format(
         payload.state,
         #payload.characters
     ))
 end
 
+local function applyLifecycleFailure(code)
+    uiFailure = code
+    helloAcknowledged = true
+    pendingRequests = {}
+
+    if uiReady then
+        setRestricted(true)
+        sendCurrentStateToNui()
+    else
+        setRestricted(false)
+    end
+
+    print(('[GC][IDENTITY][CLIENT] [%s] Identity lifecycle stopped safely'):format(code))
+end
+
+local function reportClientFailure(code)
+    if clientFailureReported then
+        return
+    end
+
+    clientFailureReported = true
+    setRestricted(false)
+    TriggerServerEvent(GCIdentityEvents.server.clientFailure, {
+        protocolVersion = GCIdentityVersion.protocol,
+        code = code
+    })
+end
+
+local function armNuiReadyWatchdog()
+    nuiWatchGeneration = nuiWatchGeneration + 1
+    local generation = nuiWatchGeneration
+
+    CreateThread(function()
+        Wait(GCIdentityConfig.client.nuiReadyTimeoutMs)
+
+        if generation ~= nuiWatchGeneration or uiReady then
+            return
+        end
+
+        print('[GC][IDENTITY][CLIENT] [GC-IDENTITY-NUI-NOT-READY] NUI JS did not acknowledge readiness')
+        reportClientFailure('GC-IDENTITY-NUI-NOT-READY')
+    end)
+end
+
 local function startHello()
     helloGeneration = helloGeneration + 1
     local generation = helloGeneration
     helloAcknowledged = false
+    uiFailure = nil
+    clientFailureReported = false
 
     CreateThread(function()
         for _ = 1, GCIdentityConfig.clientHello.maximumAttempts do
@@ -135,6 +203,10 @@ local function startHello()
                 protocolVersion = GCIdentityVersion.protocol
             })
             Wait(GCIdentityConfig.clientHello.retryIntervalMs)
+        end
+
+        if generation == helloGeneration and not helloAcknowledged then
+            applyLifecycleFailure('GC-IDENTITY-HELLO-TIMEOUT')
         end
     end)
 end
@@ -180,7 +252,9 @@ GCIdentityClientSecurity.RegisterServerEvent(
             end
         end
 
-        if uiReady then
+        if not payload.requestId and not currentSnapshot then
+            applyLifecycleFailure(payload.code)
+        elseif uiReady then
             SendNUIMessage({ type = 'rejected', payload = payload })
         end
 
@@ -190,7 +264,16 @@ GCIdentityClientSecurity.RegisterServerEvent(
 
 RegisterNUICallback(GCIdentityNuiCallbacks.ready, function(_, callback)
     uiReady = true
-    sendSnapshotToNui()
+    nuiWatchGeneration = nuiWatchGeneration + 1
+
+    if currentSnapshot then
+        setRestricted(currentSnapshot.state ~= 'ready')
+    elseif uiFailure then
+        setRestricted(true)
+    end
+
+    sendCurrentStateToNui()
+    debugLog('NUI JS ready callback received')
     callback({ ok = true })
 end)
 
@@ -263,13 +346,9 @@ AddEventHandler('onClientResourceStart', function(resourceName)
     if resourceName == GetCurrentResourceName() or resourceName == 'gc_core' then
         startHello()
 
-        CreateThread(function()
-            Wait(GCIdentityConfig.client.nuiReadyTimeoutMs)
-
-            if currentSnapshot and currentSnapshot.state ~= 'ready' and not uiReady then
-                print('[GC][IDENTITY] [GC-IDENTITY-NUI-NOT-READY] NUI did not acknowledge readiness')
-            end
-        end)
+        if resourceName == GetCurrentResourceName() then
+            armNuiReadyWatchdog()
+        end
     end
 end)
 
@@ -278,9 +357,15 @@ AddEventHandler('onClientResourceStop', function(resourceName)
         helloGeneration = helloGeneration + 1
         helloAcknowledged = false
         currentSnapshot = nil
+        uiFailure = nil
         pendingRequests = {}
-        setRestricted(true)
+        setRestricted(false)
+
+        if uiReady then
+            SendNUIMessage({ type = 'reset' })
+        end
     elseif resourceName == GetCurrentResourceName() then
+        nuiWatchGeneration = nuiWatchGeneration + 1
         setRestricted(false)
     end
 end)

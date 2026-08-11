@@ -8,9 +8,21 @@ if (!root) throw new Error('gc_identity NUI root is missing')
 
 const app = createIdentityApp(root, nuiBridge)
 window.addEventListener('message', (event: MessageEvent<NuiMessage>) => {
-  if (event.data?.type === 'snapshot' || event.data?.type === 'rejected') {
+  if (event.data?.type === 'snapshot'
+    || event.data?.type === 'rejected'
+    || event.data?.type === 'lifecycleError'
+    || event.data?.type === 'reset') {
     app.receive(event.data)
   }
 })
 
-void nuiBridge.invoke('ready', {})
+void nuiBridge.invoke('ready', {}).then((response) => {
+  if (!response.ok) {
+    app.receive({
+      type: 'lifecycleError',
+      payload: { code: response.code ?? 'GC-IDENTITY-NUI-TRANSPORT' },
+    })
+  }
+}).catch(() => {
+  app.receive({ type: 'lifecycleError', payload: { code: 'GC-IDENTITY-NUI-TRANSPORT' } })
+})

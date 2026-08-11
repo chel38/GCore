@@ -4,7 +4,7 @@ game 'gta5'
 name 'gc_identity'
 author 'GCore Project'
 description 'Server-authoritative account and character identity module for GCore'
-version '0.2.0-alpha'
+version '0.2.1-alpha'
 
 dependency 'gc_core'
 dependency 'oxmysql'

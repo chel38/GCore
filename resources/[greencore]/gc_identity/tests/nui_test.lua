@@ -99,3 +99,66 @@ GCModuleTest.Register('identity.nui_exit_uses_server_disconnect', 'security', fu
     GCModuleTest.ExpectEqual(#IdentityTest.droppedPlayers, 1, 'server disconnects requesting player once')
     GCModuleTest.ExpectEqual(IdentityTest.droppedPlayers[1].source, 62, 'exit cannot target another source')
 end)
+
+GCModuleTest.Register('identity.nui_snapshot_waits_for_js_ready_before_focus', 'runtime', function()
+    IdentityTest.Reset()
+    IdentityTest.ReloadClient()
+    IdentityTest.EmitNetwork(GCIdentityEvents.server.hello, 63, {
+        protocolVersion = 1
+    })
+    deliverLastClientEvent()
+
+    GCModuleTest.ExpectNil(IdentityTest.LastNuiMessage(), 'snapshot is retained until JS ready')
+    GCModuleTest.ExpectFalse(IdentityTest.FocusState(), 'HTML load alone never acquires focus')
+    GCModuleTest.ExpectFalse(IdentityTest.FrozenState(), 'HTML load alone never freezes the ped')
+
+    IdentityTest.InvokeNui(GCIdentityNuiCallbacks.ready, {})
+    GCModuleTest.ExpectEqual(
+        IdentityTest.LastNuiMessage().payload.state,
+        'registration_required',
+        'ready callback deterministically replays the authoritative snapshot'
+    )
+    GCModuleTest.ExpectTrue(IdentityTest.FocusState(), 'focus follows the rendered identity state')
+end)
+
+GCModuleTest.Register('identity.nui_hello_timeout_is_visible_and_retryable', 'runtime', function()
+    IdentityTest.Reset()
+    IdentityTest.ReloadClient()
+    IdentityTest.InvokeNui(GCIdentityNuiCallbacks.ready, {})
+    IdentityTest.EmitEvent('onClientResourceStart', 0, 'gc_identity')
+
+    GCModuleTest.ExpectEqual(
+        IdentityTest.LastNuiMessage().type,
+        'lifecycleError',
+        'bounded hello exhaustion becomes a terminal NUI state'
+    )
+    GCModuleTest.ExpectEqual(
+        IdentityTest.LastNuiMessage().payload.code,
+        'GC-IDENTITY-HELLO-TIMEOUT',
+        'hello timeout has a stable diagnostic code'
+    )
+    GCModuleTest.ExpectTrue(IdentityTest.FocusState(), 'visible recovery UI owns focus')
+end)
+
+GCModuleTest.Register('identity.nui_bundle_failure_disconnects_without_focus_lock', 'runtime', function()
+    IdentityTest.Reset()
+    IdentityTest.ReloadClient()
+    IdentityTest.EmitEvent('onClientResourceStart', 0, 'gc_identity')
+
+    local failure = IdentityTest.LastServerEvent()
+    GCModuleTest.ExpectEqual(
+        failure.name,
+        GCIdentityEvents.server.clientFailure,
+        'missing JS-ready reports one controlled client failure'
+    )
+    GCModuleTest.ExpectEqual(
+        failure.payload.code,
+        'GC-IDENTITY-NUI-NOT-READY',
+        'bundle failure has a stable diagnostic code'
+    )
+    GCModuleTest.ExpectFalse(IdentityTest.FocusState(), 'broken NUI never retains focus')
+    GCModuleTest.ExpectFalse(IdentityTest.FrozenState(), 'broken NUI never leaves the ped frozen')
+
+    IdentityTest.EmitNetwork(failure.name, 64, failure.payload)
+    GCModuleTest.ExpectEqual(#IdentityTest.droppedPlayers, 1, 'server performs controlled disconnect')
+end)

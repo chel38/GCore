@@ -41,9 +41,25 @@ local function registerIngress(eventName, action, validator, handler, options)
             -- recovery sends the authoritative snapshot once storage is ready.
             -- RU: Hello может обогнать bounded запуск БД после рестарта.
             -- Клиент уже делает retry, а recovery отправит snapshot после ready.
-            if options and options.silentWhileStarting
-                and serviceError == 'GC-IDENTITY-DATABASE-UNAVAILABLE' then
-                return
+            if options and options.silentTransient then
+                local transientErrors = {
+                    ['GC-IDENTITY-CORE-UNAVAILABLE'] = true,
+                    ['GC-IDENTITY-CORE-PLAYER-NOT-CONNECTED'] = true,
+                    ['GC-IDENTITY-CORE-PLAYER-NOT-READY'] = true,
+                    ['GC-IDENTITY-OPERATION-IN-PROGRESS'] = true
+                }
+
+                if transientErrors[serviceError] then
+                    return
+                end
+
+                if serviceError == 'GC-IDENTITY-DATABASE-UNAVAILABLE' then
+                    local health = GCIdentityDatabase.GetHealth()
+
+                    if health.status ~= 'degraded' then
+                        return
+                    end
+                end
             end
 
             reject(playerSource, validated, serviceError)
@@ -61,7 +77,7 @@ registerIngress(
     function(playerSource)
         return GCIdentityService.Hello(playerSource)
     end,
-    { silentWhileStarting = true }
+    { silentTransient = true }
 )
 
 registerIngress(
@@ -70,6 +86,30 @@ registerIngress(
     GCIdentityValidation.ValidateRegistration,
     GCIdentityService.RegisterAccount
 )
+
+RegisterNetEvent(GCIdentityEvents.server.clientFailure, function(payload)
+    local playerSource = source
+    local allowed, rateError = GCIdentityRateLimit.Check(playerSource, 'clientFailure')
+
+    if not allowed then
+        reject(playerSource, payload, rateError)
+        return
+    end
+
+    local validated, validationError = GCIdentityValidation.ValidateClientFailure(payload)
+
+    if not validated then
+        reject(playerSource, payload, validationError)
+        return
+    end
+
+    GCIdentityLogger.Error(
+        validated.code,
+        'Client identity lifecycle failed; disconnecting safely',
+        { source = playerSource }
+    )
+    DropPlayer(playerSource, ('GCore Identity unavailable (%s)'):format(validated.code))
+end)
 
 registerIngress(
     GCIdentityEvents.server.createCharacter,

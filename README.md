@@ -41,7 +41,7 @@ Network Protocol Version: `1`
 
 Core API Status: **Stable for module development**
 
-Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.2.0-alpha`.
+Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.2.1-alpha`.
 
 ## Возможности версии / Version features
 
@@ -156,6 +156,7 @@ timestamps, lastPed и locale. Внутренние identifiers, spawn decision 
 - [Контракт модулей](docs/ru/module-contract.md) / [Module Contract](docs/en/module-contract.md)
 - [Зависимости модулей](docs/ru/module-dependencies.md) / [Module dependencies](docs/en/module-dependencies.md)
 - [gc_identity design RU](docs/ru/modules/gc_identity/design.md) / [EN](docs/en/modules/gc_identity/design.md)
+- [Аудит NUI lifecycle](docs/ru/modules/gc_identity/nui-lifecycle-audit.md) / [NUI lifecycle audit](docs/en/modules/gc_identity/nui-lifecycle-audit.md)
 - [Persistent identity report RU](docs/ru/modules/gc_identity/implementation-report.md) / [EN](docs/en/modules/gc_identity/implementation-report.md)
 - [Отчёт модульного этапа](docs/ru/module-ecosystem-report.md) / [Module stage report](docs/en/module-ecosystem-report.md)
 - [Совместимость API](docs/ru/20-api-compatibility.md) / [API compatibility](docs/en/20-api-compatibility.md)

@@ -1,5 +1,26 @@
 # gc_identity Changelog
 
+## [0.2.1-alpha] - 2026-08-11
+
+### Fixed
+
+- The eagerly loaded NUI page no longer paints a fullscreen loading layer before
+  an authoritative Lua snapshot, removing the connection-time black screen.
+- The inactive production document no longer forces a dark colour-scheme canvas;
+  its root is explicitly hidden until an authoritative view exists.
+- NUI focus and ped restriction are acquired only after the JavaScript-ready
+  callback and are released on resource stop or bundle failure.
+- Transient core/bootstrap/database races retry silently; degraded database and
+  bounded hello failures now produce stable visible diagnostics.
+- A missing NUI-ready callback performs one validated controlled disconnect
+  instead of leaving a frozen player or an infinite black screen.
+
+### Tests
+
+- Added regressions for hidden initial UI, returning-player no-flash behavior,
+  deterministic root visibility and snapshot replay, hello timeout, database
+  degradation, broken bundle cleanup, and the client-failure allowlist.
+
 ## [0.2.0-alpha] - 2026-08-10
 
 ### Added

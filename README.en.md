@@ -32,7 +32,7 @@ Network Protocol Version: `1`
 
 Core API Status: **Stable for module development**
 
-Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.2.0-alpha`.
+Module ecosystem: `gc_example 0.1.0-alpha`, `gc_identity 0.2.1-alpha`.
 
 ## Version features
 
@@ -140,6 +140,7 @@ Server exports:
 - [Module Contract v1](docs/en/module-contract.md)
 - [Module dependency graph](docs/en/module-dependencies.md)
 - [gc_identity design](docs/en/modules/gc_identity/design.md)
+- [gc_identity NUI lifecycle audit](docs/en/modules/gc_identity/nui-lifecycle-audit.md)
 - [Persistent identity implementation report](docs/en/modules/gc_identity/implementation-report.md)
 - [Module ecosystem stage report](docs/en/module-ecosystem-report.md)
 - [API compatibility policy](docs/en/20-api-compatibility.md)

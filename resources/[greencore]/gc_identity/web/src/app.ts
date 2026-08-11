@@ -8,6 +8,10 @@ const errorMessages: Record<string, string> = {
   'GC-IDENTITY-CHARACTER-NOT-OWNED': 'Персонаж не принадлежит вашему аккаунту.',
   'GC-IDENTITY-RATE-LIMIT': 'Слишком много запросов. Подождите немного.',
   'GC-IDENTITY-DATABASE-UNAVAILABLE': 'Сервис профилей временно недоступен.',
+  'GC-IDENTITY-DATABASE-QUERY-FAILED': 'Не удалось получить профиль из базы данных.',
+  'GC-IDENTITY-CORE-UNAVAILABLE': 'Игровое ядро временно недоступно.',
+  'GC-IDENTITY-HELLO-TIMEOUT': 'Сервер не подтвердил состояние профиля вовремя.',
+  'GC-IDENTITY-NUI-NOT-READY': 'Интерфейс профиля не смог запуститься.',
   'GC-IDENTITY-CLIENT-REQUEST-PENDING': 'Предыдущий запрос ещё выполняется.',
   'GC-IDENTITY-NUI-TRANSPORT': 'Не удалось связаться с игровым клиентом.',
 }
@@ -51,6 +55,24 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
   const renderError = (): string => {
     const message = errorMessages[errorCode ?? ''] ?? 'Запрос отклонён. Повторите попытку.'
     return `<div class="alert" role="alert"><span>${escapeHtml(message)}</span><button data-action="dismiss-error" aria-label="Закрыть">×</button></div>`
+  }
+
+  const renderLifecycleFailure = (): string => {
+    const message = errorMessages[errorCode ?? ''] ?? 'Не удалось подготовить профиль.'
+    return `
+      <section class="identity-shell" data-view="lifecycle-error">
+        <div class="panel panel--small text-center">
+          <p class="eyebrow">GCore Identity</p>
+          <h1>Профиль недоступен</h1>
+          <p class="muted" role="alert">${escapeHtml(message)}</p>
+          <p class="diagnostic-code">${escapeHtml(errorCode ?? 'GC-IDENTITY-UNKNOWN')}</p>
+          <div class="actions actions--split">
+            <button class="button button--secondary" data-action="refresh">Повторить</button>
+            <button class="button button--danger" data-action="ask-exit">Выйти</button>
+          </div>
+        </div>
+        ${renderExitModal()}
+      </section>`
   }
 
   const renderExitModal = (): string => exitConfirmation ? `
@@ -126,7 +148,19 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
   }
 
   const render = (): void => {
-    if (!snapshot || ['uninitialized', 'loading', 'authorized', 'registering', 'character_selected'].includes(snapshot.state)) {
+    // EN: A FiveM ui_page is loaded eagerly. Until Lua sends an authoritative
+    // snapshot, the page must paint nothing and must not cover the game.
+    // RU: FiveM загружает ui_page заранее. Пока Lua не прислал authoritative
+    // snapshot, страница ничего не рисует и не перекрывает игру.
+    if (!snapshot) {
+      if (pendingAction === 'refresh') {
+        root.innerHTML = renderLoading()
+      } else if (errorCode) {
+        root.innerHTML = renderLifecycleFailure()
+      } else {
+        root.innerHTML = ''
+      }
+    } else if (['uninitialized', 'loading', 'authorized', 'registering', 'character_selected'].includes(snapshot.state)) {
       root.innerHTML = renderLoading()
     } else if (snapshot.state === 'registration_required') {
       root.innerHTML = renderRegistration()
@@ -137,6 +171,14 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
     } else {
       root.innerHTML = ''
     }
+
+    // EN: FiveM keeps ui_page alive for the whole resource lifetime. The DOM
+    // root therefore has an explicit visibility state instead of relying on an
+    // empty transparent page and the browser's default canvas colour.
+    // RU: FiveM держит ui_page загруженной всё время жизни ресурса. Поэтому у
+    // DOM root есть явное состояние видимости, а не зависимость от пустой
+    // страницы и фонового цвета canvas по умолчанию.
+    root.hidden = root.innerHTML.length === 0
   }
 
   const invoke = async (action: string, payload: object): Promise<void> => {
@@ -225,6 +267,15 @@ export function createIdentityApp(root: HTMLElement, bridge: NuiBridge): Identit
       } else if (message.type === 'rejected') {
         pendingAction = null
         errorCode = message.payload.code
+      } else if (message.type === 'lifecycleError') {
+        snapshot = null
+        pendingAction = null
+        errorCode = message.payload.code
+      } else if (message.type === 'reset') {
+        snapshot = null
+        pendingAction = null
+        errorCode = null
+        exitConfirmation = false
       }
       render()
     },

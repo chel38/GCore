@@ -4,7 +4,7 @@
 GCore. `gc_core` отвечает за connection/session/spawn, а этот resource — за
 регистрацию, авторизацию по trusted identifier, персонажей и identity readiness.
 
-- Resource version: `0.2.0-alpha`
+- Resource version: `0.2.1-alpha`
 - Identity API: `1` (backward-compatible, добавлен health export)
 - Identity protocol: `1`
 - Требуемый Core API: `>= 1`
@@ -59,10 +59,18 @@ ensure gc_identity
 
 ## NUI и команды
 
-NUI содержит loading, registration, создание/выбор персонажа, ошибки и
-подтверждение выхода. До authoritative `ready` он удерживает focus и замораживает
-локальное представление PED. NUI callbacks только формируют запросы; lifecycle,
-exact schema, rate, replay ID и ownership проверяет сервер.
+При eager-загрузке HTML в FiveM NUI использует прозрачный canvas документа и явно
+скрытый root. JavaScript сначала подтверждает `ready`, после чего Lua повторно
+отправляет последний authoritative snapshot.
+Только non-ready snapshot может открыть UI, получить focus и заморозить локальное
+представление PED. Snapshot `ready` остаётся скрытым и снимает focus/freeze. NUI
+callbacks только формируют запросы; lifecycle, exact schema, rate, replay ID и
+ownership проверяет сервер.
+
+Database degradation и исчерпание bounded hello показывают диагностический экран
+с retry/exit. Если JavaScript bundle не подтвердил readiness, client снимает focus,
+а server выполняет один validated controlled disconnect вместо вечного чёрного
+экрана.
 
 Диагностические команды сохранены:
 
@@ -114,8 +122,8 @@ end
 ## Network contract
 
 Client → server (internal): `hello`, `registerAccount`, `createCharacter`,
-`selectCharacter`, `exit`. Только server → client (internal): `snapshot`,
-`rejected`. Exact schemas находятся в `shared/events.lua` и
+`selectCharacter`, allowlisted `clientFailure`, `exit`. Только server → client
+(internal): `snapshot`, `rejected`. Exact schemas находятся в `shared/events.lua` и
 `server/validation.lua`. Server-only client handlers требуют FiveM origin
 `source == 65535`.
 
@@ -138,7 +146,8 @@ pnpm build
 
 См. [design](../../../docs/ru/modules/gc_identity/design.md),
 [persistence design](../../../docs/ru/modules/gc_identity/persistence-design.md) и
-[implementation report](../../../docs/ru/modules/gc_identity/implementation-report.md).
+[implementation report](../../../docs/ru/modules/gc_identity/implementation-report.md),
+а также [NUI lifecycle audit](../../../docs/ru/modules/gc_identity/nui-lifecycle-audit.md).
 
 ## Troubleshooting
 
@@ -148,4 +157,8 @@ pnpm build
   её fallback-ом.
 - `GC-IDENTITY-EMAIL-TAKEN`: normalized email уже занят.
 - `GC-IDENTITY-PROTOCOL-MISMATCH`: client/server builds различаются.
+- `GC-IDENTITY-HELLO-TIMEOUT`: authoritative identity response не пришёл за
+  bounded retry window; проверьте core и database health.
+- `GC-IDENTITY-NUI-NOT-READY`: собранный JavaScript не вызвал NUI-ready callback;
+  пересоберите `web/dist` и проверьте FiveM client log.
 - resource остановился после `restart gc_core`: выполните `ensure gc_identity`.

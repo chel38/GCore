@@ -79,3 +79,31 @@ GCModuleTest.Register('identity.hello_during_database_bootstrap_waits_for_recove
     )
     GCIdentityService.SetAvailable(true)
 end)
+
+GCModuleTest.Register('identity.hello_while_core_is_not_ready_retries_silently', 'runtime', function()
+    IdentityTest.Reset()
+    IdentityTest.core.ready[57] = false
+    IdentityTest.EmitNetwork(GCIdentityEvents.server.hello, 57, {
+        protocolVersion = 1
+    })
+    GCModuleTest.ExpectEqual(
+        #IdentityTest.clientEvents,
+        0,
+        'transient core readiness race does not become a terminal UI error'
+    )
+end)
+
+GCModuleTest.Register('identity.degraded_database_returns_terminal_diagnostic', 'runtime', function()
+    IdentityTest.Reset()
+    GCIdentityService.SetAvailable(false)
+    GCIdentityDatabase.MarkRuntimeFailure('GC-IDENTITY-DATABASE-UNAVAILABLE')
+    IdentityTest.EmitNetwork(GCIdentityEvents.server.hello, 58, {
+        protocolVersion = 1
+    })
+    GCModuleTest.ExpectEqual(#IdentityTest.clientEvents, 1, 'degraded database answers the client')
+    GCModuleTest.ExpectEqual(
+        IdentityTest.LastClientEvent().payload.code,
+        'GC-IDENTITY-DATABASE-UNAVAILABLE',
+        'database outage has a visible stable diagnostic'
+    )
+end)
